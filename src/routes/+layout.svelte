@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Toaster from "$lib/components/Toaster.svelte";
   import Sidebar from "../lib/components/Sidebar.svelte";
   import TitleBar from "../lib/components/TitleBar.svelte";
   import "./layout.css";
@@ -6,6 +7,7 @@
   const { children } = $props();
 </script>
 
+<Toaster />
 <div class="flex h-screen w-full overflow-hidden bg-background text-text">
   <Sidebar />
   <div class="flex flex-col flex-1 min-w-0 relative">
