@@ -2,6 +2,7 @@
   import Button from "$lib/components/Button.svelte";
   import Modal from "$lib/components/Modal.svelte";
   import { tooltip } from "$lib/hooks";
+  import { createResource } from "$lib/stores/resource.svelte";
   import { toast } from "$lib/stores/toast.svelte";
 
   let showModal = $state(false);
@@ -26,6 +27,8 @@
     { name: "text", cls: "bg-text" },
     { name: "gray", cls: "bg-gray" },
   ];
+
+  const track = createResource("helloWorld", "From My window!");
 </script>
 
 <div
@@ -138,6 +141,23 @@
             <Button onclick={() => (showModal = true)}>Open Modal</Button>
           </div>
         </div>
+      </section>
+
+      <section>
+        <h2 class="text-sm font-bold uppercase tracking-wider text-gray mb-4">
+          Resource Store Test
+        </h2>
+        <code
+          class="bg-secondary text-text px-3 py-1 rounded-md text-sm font-mono"
+        >
+          {#if track.loading}
+            Loading...
+          {:else if track.error}
+            Error: {track.error}
+          {:else}
+            {JSON.stringify(track.data, null, 2)}
+          {/if}
+        </code>
       </section>
     </div>
   </div>
