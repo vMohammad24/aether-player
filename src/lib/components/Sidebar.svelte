@@ -2,13 +2,13 @@
   import { page } from "$app/state";
   import {
     ChevronRight,
+    CirclePlay,
     FileText,
     Folder,
     Headphones,
-    Home,
+    House,
     Menu,
-    Mic2,
-    PlayCircle,
+    Mic,
     X,
   } from "@lucide/svelte";
   import { onMount } from "svelte";
@@ -17,7 +17,6 @@
 
   let isOpen = $state(true);
   let isMobile = $state(false);
-  let dropDownOpen = $state(false);
   let expandedSections = $state<Record<string, boolean>>({ playlists: true });
 
   let config = $state([
@@ -25,7 +24,7 @@
       id: "home",
       label: "Home",
       href: "/",
-      icon: Home,
+      icon: House,
       type: "single",
       disabled: false,
     },
@@ -40,7 +39,7 @@
       id: "feed",
       label: "Feed",
       href: "/feed",
-      icon: Mic2,
+      icon: Mic,
       type: "single",
     },
     {
@@ -50,9 +49,9 @@
       type: "section",
       children: [
         { label: "Liked Songs", href: "/library/liked", icon: Headphones },
-        { label: "Synthwave Mix", href: "/playlist/1", icon: PlayCircle },
-        { label: "Deep Focus", href: "/playlist/2", icon: PlayCircle },
-        { label: "Late Night", href: "/playlist/3", icon: PlayCircle },
+        { label: "Mix 1", href: "/playlist/1", icon: CirclePlay },
+        { label: "Mix 2", href: "/playlist/2", icon: CirclePlay },
+        { label: "Mix 3", href: "/playlist/3", icon: CirclePlay },
       ],
     },
   ]);
@@ -84,9 +83,6 @@
     };
 
     checkMobile();
-    window.addEventListener("resize", checkMobile);
-
-    // Mobile Swipe Logic
     let touchStartX: number;
     let touchStartY: number;
     const swipeThreshold = 50;
@@ -139,9 +135,7 @@
     >
       <Menu size={24} class="text-text" />
     </Button>
-    <span class="text-lg font-bold tracking-tight text-text">
-      Aether<span class="text-cyan">.</span>
-    </span>
+    <span class="text-lg font-bold tracking-tight text-text"> Aether </span>
     <div class="w-8"></div>
   </header>
 {/if}
@@ -175,10 +169,7 @@
           href="/"
           class="text-2xl font-bold tracking-tight text-text truncate"
         >
-          Aether<span
-            class="text-cyan drop-shadow-[0_0_8px_rgba(102,252,241,0.5)]"
-            >.</span
-          >
+          Aether
         </a>
       {/if}
 
@@ -238,7 +229,7 @@
 
               {#if page.url.pathname === item.href}
                 <div
-                  class="absolute left-0 top-1/2 -translate-y-1/2 h-8 w-1 rounded-r-full bg-cyan shadow-[0_0_10px_var(--color-cyan)]"
+                  class="absolute left-0 top-1/2 -translate-y-1/2 h-6 w-1 rounded-r-full bg-cyan/80"
                 ></div>
               {/if}
             </a>
