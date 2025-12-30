@@ -7,6 +7,14 @@
 export const commands = {
 async helloWorld(trackName: string) : Promise<Track> {
     return await TAURI_INVOKE("hello_world", { trackName });
+},
+async playLocalFile(path: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("play_local_file", { path }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
