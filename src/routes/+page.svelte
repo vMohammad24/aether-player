@@ -1,12 +1,18 @@
 <script lang="ts">
+  import { commands } from "$lib/bindings";
   import Button from "$lib/components/Button.svelte";
+  import Image from "$lib/components/Image.svelte";
   import Modal from "$lib/components/Modal.svelte";
   import { tooltip } from "$lib/hooks";
-  import { createResource } from "$lib/stores/resource.svelte";
+  import { createMutation, createResource } from "$lib/stores/resource.svelte";
   import { toast } from "$lib/stores/toast.svelte";
-
+  import { open } from "@tauri-apps/plugin-dialog";
   let showModal = $state(false);
 
+  const recentAlbums = createResource("getRecentAlbums", "local", 6);
+  const scanLibrary = createMutation("scanLibrary", {
+    invalidate: ["getRecentAlbums"],
+  });
   const colors = [
     { name: "background", cls: "bg-background" },
     { name: "secondary", cls: "bg-secondary" },
@@ -27,8 +33,6 @@
     { name: "text", cls: "bg-text" },
     { name: "gray", cls: "bg-gray" },
   ];
-
-  const track = createResource("helloWorld", "From My window!");
 </script>
 
 <div
@@ -61,12 +65,7 @@
             <h3 class="text-lg font-semibold text-text">Buttons & Tooltips</h3>
             <div class="flex flex-wrap gap-4 items-center">
               <span use:tooltip={"Primary Button"}>
-                <Button
-                  variant="primary"
-                  onclick={() => console.log("clicked")}
-                >
-                  Primary
-                </Button>
+                <Button variant="primary">Primary</Button>
               </span>
               <span
                 use:tooltip={{
@@ -137,27 +136,115 @@
           </div>
 
           <div class="space-y-4">
-            <h3 class="text-lg font-semibold text-text">Modals</h3>
+            <h3 class="text-lg font-semibold text-text">Etc</h3>
             <Button onclick={() => (showModal = true)}>Open Modal</Button>
+            <!-- <span
+              use:contextMenu={[
+                { label: "Context Menu" },
+                { type: "separator" },
+                { label: "Another Item", type: "danger" },
+              ]}
+            >
+              <Button>Context Menu</Button>
+            </span> -->
           </div>
         </div>
       </section>
 
       <section>
-        <h2 class="text-sm font-bold uppercase tracking-wider text-gray mb-4">
-          Resource Store Test
-        </h2>
-        <code
-          class="bg-secondary text-text px-3 py-1 rounded-md text-sm font-mono"
-        >
-          {#if track.loading}
-            Loading...
-          {:else if track.error}
-            Error: {track.error}
-          {:else}
-            {JSON.stringify(track.data, null, 2)}
-          {/if}
-        </code>
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-sm font-bold uppercase tracking-wider text-gray">
+            Recently Added (Resource Test)
+          </h2>
+          <Button variant="ghost" onclick={() => recentAlbums.refetch()}>
+            {recentAlbums.isValidating ? "Refreshing..." : "Refresh"}
+          </Button>
+          <Button variant="ghost" onclick={() => scanLibrary.trigger("local")}>
+            {scanLibrary.isPending ? "Scanning" : "Scan"}
+          </Button>
+        </div>
+
+        {#if recentAlbums.loading}
+          <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
+            {#each Array(6) as _}
+              <div class="animate-pulse space-y-2">
+                <div class="aspect-square bg-secondary rounded-md"></div>
+                <div class="h-3 bg-secondary rounded w-3/4"></div>
+                <div class="h-2 bg-secondary rounded w-1/2"></div>
+              </div>
+            {/each}
+          </div>
+        {:else if recentAlbums.error}
+          <div
+            class="p-4 rounded-md bg-red/10 border border-red/20 text-red text-sm"
+          >
+            Failed to load library: {recentAlbums.error}
+          </div>
+        {:else if recentAlbums.data && recentAlbums.data.length > 0}
+          <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
+            {#each recentAlbums.data as album}
+              <div class="group flex flex-col gap-2 cursor-pointer">
+                <div
+                  class="relative aspect-square rounded-md bg-secondary border border-white/5 overflow-hidden shadow-lg group-hover:scale-[1.02] transition-transform duration-200"
+                >
+                  {#if album.coverArt}
+                    <Image
+                      src={album.coverArt}
+                      alt={album.title}
+                      type="cover"
+                      class="w-full h-full object-cover"
+                    />
+                  {:else}
+                    <div
+                      class="w-full h-full flex items-center justify-center text-gray/20"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="32"
+                        height="32"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        ><path d="M9 18V5l12-2v13" /><circle
+                          cx="6"
+                          cy="18"
+                          r="3"
+                        /><circle cx="18" cy="16" r="3" /></svg
+                      >
+                    </div>
+                  {/if}
+                </div>
+                <div class="flex flex-col min-w-0">
+                  <span class="text-sm font-medium text-text truncate"
+                    >{album.title}</span
+                  >
+                  <span class="text-xs text-gray truncate"
+                    >{album.artistName}</span
+                  >
+                </div>
+              </div>
+            {/each}
+          </div>
+        {:else}
+          <div
+            class="text-center py-12 border-2 border-dashed border-border rounded-xl"
+          >
+            <p class="text-gray mb-4">No music found in your local library.</p>
+            <Button
+              variant="outline"
+              onclick={async () =>
+                commands.addLibraryRoot(
+                  "local",
+                  (await open({ directory: true })) || ""
+                )}
+            >
+              Add Music Folder
+            </Button>
+          </div>
+        {/if}
       </section>
     </div>
   </div>

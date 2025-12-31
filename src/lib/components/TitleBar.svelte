@@ -1,5 +1,7 @@
 <script lang="ts">
   import { afterNavigate } from "$app/navigation";
+  import type { UnifiedSearchResult } from "$lib/bindings";
+  import { createMutation } from "$lib/stores/resource.svelte";
   import {
     ChevronLeft,
     ChevronRight,
@@ -34,7 +36,21 @@
         break;
     }
   }
-
+  let searchResults: UnifiedSearchResult = $state({
+    albums: [],
+    artists: [],
+    tracks: [],
+  });
+  const search = createMutation("search", {
+    onSuccess: (data) => {
+      searchResults = data;
+      console.log("Search results:", data);
+    },
+    onError: (error) => {
+      console.error("Search error:", error);
+      searchResults = { albums: [], artists: [], tracks: [] };
+    },
+  });
   function handleNavigationAction(action: "back" | "forward") {
     if (action === "back") canGoBack && history.back();
     else canGoForward && history.forward();
@@ -90,6 +106,7 @@
       type="text"
       placeholder="Search artists or tracks"
       bind:value={searchQuery}
+      oninput={() => search.trigger("local", searchQuery)}
       onfocus={() => (isFocused = true)}
       onblur={() => (isFocused = false)}
       class="w-full bg-secondary/50 border border-white/5 rounded-full py-2.5 pl-10 pr-4 text-sm text-text

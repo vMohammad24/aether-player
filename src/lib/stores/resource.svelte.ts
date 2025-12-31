@@ -3,8 +3,11 @@ import { get, set } from 'idb-keyval';
 
 type Commands = typeof commands;
 type CommandKey = keyof Commands;
-
-
+type UnwrapType<T> = T extends { status: "ok"; data: infer D }
+    ? D
+    : T extends { status: "error" }
+    ? never
+    : T;
 function serializeArgs(args: any[]): string {
     return JSON.stringify(args, (_, v) => {
         if (typeof v === 'object' && v !== null && !Array.isArray(v)) {
@@ -15,6 +18,19 @@ function serializeArgs(args: any[]): string {
         }
         return v;
     });
+}
+
+function unwrap<T>(value: T): UnwrapType<T> {
+    if (value && typeof value === 'object' && 'status' in value) {
+        const v = value as any;
+        if (v.status === 'error') {
+            throw v.error;
+        }
+        if (v.status === 'ok') {
+            return v.data;
+        }
+    }
+    return value as UnwrapType<T>;
 }
 
 // @ts-expect-dogshitcode this is *probably* fine for cache
@@ -42,11 +58,11 @@ class ResourceState<T> {
 
     refCount = 0;
 
-    private fetcher: (...args: any[]) => Promise<T>;
+    private fetcher: (...args: any[]) => Promise<any>;
     private args: any[];
     private cacheKey: string;
 
-    constructor(fetcher: (...args: any[]) => Promise<T>, args: any[], cacheKey: string) {
+    constructor(fetcher: (...args: any[]) => Promise<any>, args: any[], cacheKey: string) {
         this.fetcher = fetcher;
         this.args = args;
         this.cacheKey = cacheKey;
@@ -56,7 +72,7 @@ class ResourceState<T> {
     async hydrateAndFetch() {
         try {
             const cached = await get<T>(hash(this.cacheKey));
-            if (cached) {
+            if (cached !== undefined) {
                 this.data = cached;
                 this.lastUpdated = 0;
             }
@@ -76,11 +92,13 @@ class ResourceState<T> {
         this.error = null;
 
         try {
-            const result = await this.fetcher(...this.args);
-            this.data = result;
+            const raw = await this.fetcher(...this.args);
+            const data = unwrap(raw);
+
+            this.data = data;
             this.lastUpdated = Date.now();
 
-            set(hash(this.cacheKey), result).catch(e => console.warn('[Cache Write Failed]', e));
+            set(hash(this.cacheKey), data).catch(e => console.warn('[Cache Write Failed]', e));
 
         } catch (err) {
             console.error('[SWR error]', err);
@@ -99,22 +117,23 @@ function invalidate(key: string) {
     }
 }
 
-
 export function createResource<K extends CommandKey>(
     commandKey: K,
     ...args: Parameters<Commands[K]>
 ) {
-    type T = Awaited<ReturnType<Commands[K]>>;
+
+    type RawReturn = Awaited<ReturnType<Commands[K]>>;
+
+    type DataT = UnwrapType<RawReturn>;
 
     const cacheKey = `${String(commandKey)}:${serializeArgs(args)}`;
 
     if (!globalCache.has(cacheKey)) {
         const fetcher = commands[commandKey];
-        // @ts-expect-error - dynamic invoke
-        globalCache.set(cacheKey, new ResourceState<T>(fetcher, args, cacheKey));
+        globalCache.set(cacheKey, new ResourceState<DataT>(fetcher, args, cacheKey));
     }
 
-    const state = globalCache.get(cacheKey) as ResourceState<T>;
+    const state = globalCache.get(cacheKey) as ResourceState<DataT>;
 
     $effect(() => {
         state.refCount++;
@@ -153,33 +172,41 @@ export function createResource<K extends CommandKey>(
     };
 }
 
-export function createMutation<K extends CommandKey, T = Awaited<ReturnType<Commands[K]>>>(
+export function createMutation<
+    K extends CommandKey,
+
+    DataT = UnwrapType<Awaited<ReturnType<Commands[K]>>>
+>(
     commandKey: K,
     options?: {
-        onSuccess?: (data: T) => void;
+        onSuccess?: (data: DataT) => void;
         onError?: (error: unknown) => void;
         invalidate?: CommandKey | CommandKey[];
     }
 ) {
     let isPending = $state(false);
     let error = $state<string | null>(null);
-    let lastResult: T | null = null;
+    let lastResult: DataT | null = null;
+
     const trigger = async (...args: Parameters<Commands[K]>) => {
         isPending = true;
         error = null;
 
         try {
             // @ts-expect-error dynamic invoke
-            const result = await commands[commandKey].apply(null, args) as T;
+            const rawResult = await commands[commandKey].apply(null, args);
+
+
+            const data = unwrap(rawResult) as DataT;
 
             if (options?.invalidate) {
                 const keys = Array.isArray(options.invalidate) ? options.invalidate : [options.invalidate];
                 keys.forEach(k => invalidate(String(k)));
             }
 
-            options?.onSuccess?.(result);
-            lastResult = result;
-            return result;
+            options?.onSuccess?.(data);
+            lastResult = data;
+            return data;
         } catch (err) {
             console.error('[Mutation Error]', err);
             error = err instanceof Error ? err.message : String(err);

@@ -2,38 +2,153 @@
     all(not(debug_assertions), target_os = "windows"),
     windows_subsystem = "windows"
 )]
-use serde::Serialize;
-use specta::Type;
-use specta_typescript::Typescript;
-use tauri_specta::{collect_commands, Builder};
+mod commands;
+mod models;
+mod players;
+mod providers;
+mod queue;
+mod state;
+mod traits;
 
-#[derive(Serialize, Type)]
-pub struct Track {
-    pub id: String,
-    pub title: String,
-}
+use crate::models::{config::SourceConfig, AppConfig, AudioBackend};
+use crate::players::mpv::MpvPlayer;
+use crate::providers::local::LocalProvider;
+use crate::queue::QueueManager;
+use crate::state::AppState;
+use crate::traits::{AudioEngine, LibraryProvider};
+use std::collections::HashMap;
+use tauri::Manager;
+use tauri_plugin_store::StoreExt;
 
-#[tauri::command]
-#[specta::specta]
-fn hello_world(track_name: String) -> Track {
-    Track {
-        id: "1".to_string(),
-        title: track_name,
+fn create_audio_engine(config: &AppConfig) -> anyhow::Result<Box<dyn AudioEngine>> {
+    match &config.audio_engine {
+        AudioBackend::Mpv(mpv_opts) => Ok(Box::new(MpvPlayer::new(mpv_opts.clone())?)),
     }
 }
 
-pub fn run() {
-    let builder = Builder::<tauri::Wry>::new().commands(collect_commands![hello_world,]);
+pub const APP_IDENTIFIER: &str = "dev.vmohammad.aether";
+
+pub async fn run() {
+    let builder = tauri_specta::Builder::<tauri::Wry>::new()
+        .commands(tauri_specta::collect_commands![
+            commands::player::play_track,
+            commands::player::play,
+            commands::player::pause,
+            commands::player::stop,
+            commands::player::next,
+            commands::player::prev,
+            commands::player::seek,
+            commands::player::set_volume,
+            commands::player::set_repeat,
+            commands::player::toggle_shuffle,
+            commands::player::get_player_state,
+            commands::queue::get_queue,
+            commands::queue::add_to_queue,
+            commands::queue::add_next,
+            commands::queue::remove_from_queue,
+            commands::queue::clear_queue,
+            commands::queue::play_from_queue,
+            commands::library::scan_library,
+            commands::library::add_library_root,
+            commands::library::get_playlists,
+            commands::library::create_playlist,
+            commands::library::delete_playlist,
+            commands::library::add_to_playlist,
+            commands::library::remove_from_playlist,
+            commands::library::get_playlist_tracks,
+            commands::library::get_recent_albums,
+            commands::library::get_favorites,
+            commands::library::search,
+            commands::library::get_artist,
+            commands::library::get_artist_albums,
+            commands::library::get_album_tracks,
+            commands::library::set_favorite,
+            commands::library::add_source,
+            commands::library::delete_source,
+            commands::config::get_default_config,
+            commands::config::get_app_config,
+            commands::config::save_app_config
+        ])
+        .events(tauri_specta::collect_events![
+            crate::models::entities::PlayerEvent
+        ]);
 
     #[cfg(debug_assertions)]
     builder
-        .export(Typescript::default(), "../src/lib/bindings.ts")
+        .export(
+            specta_typescript::Typescript::default(),
+            "../src/lib/bindings.ts",
+        )
         .expect("Failed to export typescript bindings");
 
+    use std::sync::Arc;
+    let providers: HashMap<String, Arc<dyn LibraryProvider>> = HashMap::new();
+
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_store::Builder::new().build())
+        .plugin(tauri_plugin_log::Builder::default().build())
+        .plugin(tauri_plugin_sql::Builder::default().build())
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            #[cfg(desktop)]
+            {
+                let _ = app
+                    .get_webview_window("main")
+                    .expect("no main window")
+                    .set_focus();
+            }
+        }))
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
             builder.mount_events(app);
+
+            let store = app.store("config.json")?;
+            let config: AppConfig = if let Some(val) = store.get("appConfig") {
+                match serde_json::from_value(val) {
+                    Ok(c) => c,
+                    Err(e) => {
+                        log::error!("Failed to parse appConfig: {}. Using default.", e);
+                        AppConfig::default()
+                    }
+                }
+            } else {
+                AppConfig::default()
+            };
+
+            let player = create_audio_engine(&config)
+                .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
+
+            let queue = QueueManager::new(player, providers);
+
+            app.manage(AppState::new(queue.clone()));
+
+            let handle = app.handle().clone();
+
+            tauri::async_runtime::spawn(async move {
+                for source in config.sources {
+                    if let SourceConfig::Local { id, path, .. } = source {
+                        if let Some(app_data_dir) = dirs::data_local_dir() {
+                            let data_dir = app_data_dir.join(crate::APP_IDENTIFIER);
+                            let db_path = data_dir.join(format!("library_{}.db", id));
+
+                            if let Ok(provider) =
+                                LocalProvider::new(id.clone(), &db_path, &data_dir).await
+                            {
+                                let _ = provider.add_root(&path).await;
+
+                                queue.add_provider(Arc::new(provider)).await;
+                            }
+                        }
+                    }
+                }
+
+                use tauri_specta::Event;
+                let mut rx = queue.player.subscribe();
+                while let Ok(event) = rx.recv().await {
+                    let _ = event.emit(&handle);
+                }
+            });
 
             Ok(())
         })

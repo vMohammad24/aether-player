@@ -13,10 +13,32 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["protocol-asset"] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-specta = "2.0.0-rc.21"
+specta = { version = "2.0.0-rc.21", features = ["chrono"] }
 specta-typescript = "0.0.9"
 tauri-specta = { version = "2.0.0-rc.21", features = ["derive", "typescript"] }
+tokio = { version = "1", features = ["full"] }
+rand = "0.9"
+libmpv2 = "5"
+anyhow = "1.0"
+tempfile= "3"
+async-trait = "0.1"
+log = "0.4"
+lofty = "0.22"
+jwalk = "0.8.1"
+tauri-plugin-log = "2.7.1"
+tauri-plugin-store = "2"
+tauri-plugin-sql = { version = "2.3.1", features = ["sqlite"] }
+uuid = { version = "1.19.0", features = ["v4"] }
+sqlx = { version = "0.8.6", features = ["sqlite", "runtime-tokio-rustls", "macros", "chrono"] }
+dirs = "6.0.0"
+md5 = "0.8.0"
+chrono = { version = "0.4.42", features = ["serde"] }
+tauri-plugin-dialog = "2"
+rayon = "1.8"
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-single-instance = "2"
