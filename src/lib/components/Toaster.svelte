@@ -3,7 +3,7 @@
     CircleCheck,
     CircleX,
     Info,
-    Loader,
+    LoaderCircle,
     TriangleAlert,
     X,
   } from "@lucide/svelte";
@@ -37,7 +37,7 @@
     success: CircleCheck,
     warning: TriangleAlert,
     error: CircleX,
-    loading: Loader,
+    loading: LoaderCircle,
   };
 
   const colorClasses = {
