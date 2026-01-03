@@ -1,18 +1,38 @@
 <script lang="ts">
-  import { commands, type SourceConfig } from "$lib/bindings";
+  import { type SourceConfig } from "$lib/bindings";
   import Button from "$lib/components/Button.svelte";
   import Modal from "$lib/components/Modal.svelte";
   import { config } from "$lib/stores/config.svelte";
   import { confirm } from "$lib/stores/confirm.svelte";
+  import { createMutation } from "$lib/stores/resource.svelte";
   import { toast } from "$lib/stores/toast.svelte";
-  import { Folder, Globe, Music2, Trash } from "@lucide/svelte";
+  import { Folder, Globe, Music2, RefreshCcw, Trash } from "@lucide/svelte";
   import { open } from "@tauri-apps/plugin-dialog";
 
   let showAddSourceModal = $state(false);
   let newSourceType = $state<"local" | "subsonic">("local");
   let localPath = $state("");
   let localName = $state("My Music");
-  let isSubmitting = $state(false);
+
+  const addSource = createMutation("addSource", {
+    onError: (e) => toast.error(`Failed to add source: ${e}`),
+    onSuccess: () => {
+      config.forceSync();
+      showAddSourceModal = false;
+      resetSourceForm();
+      toast.success("Source added");
+    },
+  });
+
+  const deleteSource = createMutation("deleteSource", {
+    onError: (e) => toast.error(`Failed to remove source: ${e}`),
+    onSuccess: () => {
+      config.forceSync();
+      toast.success("Source removed");
+    },
+  });
+
+  const rescanSource = createMutation("scanLibrary");
 
   function generateId() {
     return Math.random().toString(36).substring(2, 15);
@@ -22,7 +42,6 @@
     if (newSourceType === "local") {
       if (!localPath) return toast.error("Path is required");
 
-      isSubmitting = true;
       const newSource: SourceConfig = {
         type: "local",
         id: generateId(),
@@ -31,19 +50,7 @@
         enabled: true,
       };
 
-      try {
-        const res = await commands.addSource(newSource);
-        if (res.status === "error") throw new Error(res.error);
-
-        await config.forceSync();
-        toast.success("Source added");
-        showAddSourceModal = false;
-        resetSourceForm();
-      } catch (e) {
-        toast.error(`Failed to add source: ${e}`);
-      } finally {
-        isSubmitting = false;
-      }
+      const res = await addSource.trigger(newSource);
     } else {
       toast.error("Subsonic not fully implemented in UI yet");
     }
@@ -51,14 +58,10 @@
 
   async function handleDeleteSource(id: string) {
     if (await confirm("Are you sure you want to remove this source?")) {
-      try {
-        const res = await commands.deleteSource(id);
-        if (res.status === "error") throw new Error(res.error);
-
+      const res = await deleteSource.trigger(id);
+      if (res) {
         await config.forceSync();
         toast.success("Source removed");
-      } catch (e) {
-        toast.error(`Failed to remove source: ${e}`);
       }
     }
   }
@@ -105,13 +108,27 @@
         </div>
       </div>
 
-      <Button
-        variant="ghost"
-        size="sm"
-        onclick={() => handleDeleteSource(source.id)}
-        class="text-subtext hover:text-red-400 h-10 w-10 p-0"
-        leftIcon={Trash}
-      ></Button>
+      <div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onclick={() =>
+            toast.promise(rescanSource.trigger(source.id), {
+              loading: `Rescanning ${source.name}...`,
+              success: "Rescan complete!",
+              error: (e) => `Rescan failed: ${e}`,
+            })}
+          class="text-subtext hover:text-text h-10 w-10 p-0"
+          leftIcon={RefreshCcw}
+        ></Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onclick={() => handleDeleteSource(source.id)}
+          class="text-subtext hover:text-red h-10 w-10 p-0"
+          leftIcon={Trash}
+        ></Button>
+      </div>
     </div>
   {:else}
     <div
@@ -204,8 +221,8 @@
       <Button variant="ghost" onclick={() => (showAddSourceModal = false)}
         >Cancel</Button
       >
-      <Button onclick={handleAddSource} disabled={isSubmitting}>
-        {#if isSubmitting}Adding...{:else}Add Source{/if}
+      <Button onclick={handleAddSource} disabled={addSource.isPending}>
+        {#if addSource.isPending}Adding...{:else}Add Source{/if}
       </Button>
     </div>
   </div>
