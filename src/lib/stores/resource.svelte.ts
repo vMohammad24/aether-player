@@ -202,7 +202,6 @@ export function createResource<K extends CommandKey>(
         refetch: () => state.fetch(true)
     };
 }
-
 export function createGlobalResource<K extends CommandKey>(
     commandKey: K,
     ...args: Parameters<Commands[K]>
@@ -242,7 +241,6 @@ export function createGlobalResource<K extends CommandKey>(
         mutate: (data: DataT) => {
             state.data = data;
             state.lastUpdated = Date.now();
-            set(hash(cacheKey), data).catch(e => console.warn('[Cache Write Failed]', e));
         }
     };
 }
