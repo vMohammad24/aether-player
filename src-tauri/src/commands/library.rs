@@ -96,12 +96,23 @@ pub async fn delete_source(
 
 #[tauri::command]
 #[specta::specta]
-pub async fn scan_library(state: State<'_, AppState>) -> Result<(), String> {
+pub async fn scan_libraries(state: State<'_, AppState>) -> Result<(), String> {
     let providers = state.queue.get_providers().await;
     for provider in providers.values() {
         let _ = provider.scan().await;
     }
     Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn scan_library(state: State<'_, AppState>, provider_id: String) -> Result<(), String> {
+    let provider = state
+        .queue
+        .get_provider(&provider_id)
+        .await
+        .ok_or("Provider not found".to_string())?;
+    provider.scan().await
 }
 
 #[tauri::command]
@@ -284,6 +295,18 @@ pub async fn get_artist(state: State<'_, AppState>, artist_id: String) -> Result
         }
     }
     Err("Artist not found".to_string())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn get_album(state: State<'_, AppState>, album_id: String) -> Result<Album, String> {
+    let providers = state.queue.get_providers().await;
+    for provider in providers.values() {
+        if let Ok(album) = provider.get_album(&album_id).await {
+            return Ok(album);
+        }
+    }
+    Err("Album not found".to_string())
 }
 
 #[tauri::command]

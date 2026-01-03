@@ -1,7 +1,29 @@
+<script module lang="ts">
+  import { appLocalDataDir, join, sep } from "@tauri-apps/api/path";
+
+  let pathConfigPromise: Promise<{
+    coversDir: string;
+    appDataDir: string;
+    separator: string;
+  }> | null = null;
+
+  function getPathConfig() {
+    if (!pathConfigPromise) {
+      pathConfigPromise = (async () => {
+        const separator = sep();
+        const appDataDir = await appLocalDataDir();
+        const coversDir = await join(appDataDir, "covers");
+
+        return { coversDir, appDataDir, separator };
+      })();
+    }
+    return pathConfigPromise;
+  }
+</script>
+
 <script lang="ts">
   import { ImageIcon } from "@lucide/svelte";
   import { convertFileSrc } from "@tauri-apps/api/core";
-  import { appLocalDataDir, join } from "@tauri-apps/api/path";
 
   let {
     src,
@@ -14,11 +36,15 @@
     class?: string;
     type?: "cover";
   } = $props();
-  let finalSrc: string | null = $state("");
-  const appDataDirPath = await appLocalDataDir();
+
+  let finalSrc: string | null = $state(null);
 
   $effect(() => {
-    if (!src) return;
+    if (!src) {
+      finalSrc = null;
+      return;
+    }
+
     if (src.startsWith("http")) {
       finalSrc = src;
       return;
@@ -26,19 +52,16 @@
 
     let active = true;
 
-    async function resolvePath() {
-      if (!src) return;
-      const path = await join(
-        appDataDirPath,
-        type === "cover" ? "covers" : "",
-        src
-      );
-      if (active) {
-        finalSrc = convertFileSrc(path);
-      }
-    }
+    getPathConfig().then(({ coversDir, appDataDir, separator }) => {
+      if (!active) return;
 
-    resolvePath();
+      const basePath = type === "cover" ? coversDir : appDataDir;
+
+      const cleanSrc = src!.startsWith(separator) ? src!.slice(1) : src;
+      const fullPath = `${basePath}${separator}${cleanSrc}`;
+
+      finalSrc = convertFileSrc(fullPath);
+    });
 
     return () => {
       active = false;

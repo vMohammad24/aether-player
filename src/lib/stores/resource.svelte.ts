@@ -1,5 +1,6 @@
 import { commands } from '$lib/bindings';
 import { get, set } from 'idb-keyval';
+import { untrack } from 'svelte';
 
 type Commands = typeof commands;
 type CommandKey = keyof Commands;
@@ -47,6 +48,7 @@ const hash = (str: string): string => {
 
 const globalCache = new Map<string, ResourceState<any>>();
 const garbageCollectors = new Map<string, ReturnType<typeof setTimeout>>();
+const persistenceDebouncers = new Map<string, ReturnType<typeof setTimeout>>();
 
 class ResourceState<T> {
     data = $state<T | null>(null);
@@ -109,11 +111,36 @@ class ResourceState<T> {
     }
 }
 
-function invalidate(key: string) {
+export function invalidate(key: string) {
     for (const [cacheKey, state] of globalCache.entries()) {
         if (cacheKey.startsWith(`${key}:`)) {
             state.fetch(true);
         }
+    }
+}
+
+export function updateCache<K extends CommandKey>(
+    commandKey: K,
+    args: Parameters<Commands[K]>,
+    updater: (old: UnwrapType<Awaited<ReturnType<Commands[K]>>> | null) => UnwrapType<Awaited<ReturnType<Commands[K]>>> | null
+) {
+    const cacheKey = `${String(commandKey)}:${serializeArgs(args)}`;
+    const state = globalCache.get(cacheKey);
+    if (state) {
+        const newData = updater(state.data);
+        state.data = newData;
+        state.lastUpdated = Date.now();
+
+        if (persistenceDebouncers.has(cacheKey)) {
+            clearTimeout(persistenceDebouncers.get(cacheKey)!);
+        }
+
+        const timeout = setTimeout(() => {
+            set(hash(cacheKey), newData).catch(e => console.warn('[Cache Write Failed]', e));
+            persistenceDebouncers.delete(cacheKey);
+        }, 1000);
+
+        persistenceDebouncers.set(cacheKey, timeout);
     }
 }
 
@@ -143,8 +170,12 @@ export function createResource<K extends CommandKey>(
             garbageCollectors.delete(cacheKey);
         }
 
-        if (!state.isHydrating && state.data !== null && (Date.now() - state.lastUpdated > 10000)) {
-            state.fetch();
+        if (!state.isHydrating) {
+            untrack(() => {
+                if (state.data !== null && (Date.now() - state.lastUpdated > 10000)) {
+                    state.fetch();
+                }
+            });
         }
 
         return () => {
@@ -169,6 +200,50 @@ export function createResource<K extends CommandKey>(
         get isValidating() { return state.loading },
         get error() { return state.error },
         refetch: () => state.fetch(true)
+    };
+}
+
+export function createGlobalResource<K extends CommandKey>(
+    commandKey: K,
+    ...args: Parameters<Commands[K]>
+) {
+    type RawReturn = Awaited<ReturnType<Commands[K]>>;
+    type DataT = UnwrapType<RawReturn>;
+
+    const cacheKey = `${String(commandKey)}:${serializeArgs(args)}`;
+
+    if (!globalCache.has(cacheKey)) {
+        const fetcher = commands[commandKey];
+        globalCache.set(cacheKey, new ResourceState<DataT>(fetcher, args, cacheKey));
+    }
+
+    const state = globalCache.get(cacheKey) as ResourceState<DataT>;
+
+
+    state.refCount++;
+
+    if (garbageCollectors.has(cacheKey)) {
+        clearTimeout(garbageCollectors.get(cacheKey)!);
+        garbageCollectors.delete(cacheKey);
+    }
+
+
+    if (!state.isHydrating && state.data === null && !state.loading) {
+        state.fetch();
+    }
+
+    return {
+        get data() { return state.data },
+        get loading() { return state.data === null && state.loading },
+        get isHydrating() { return state.isHydrating },
+        get isValidating() { return state.loading },
+        get error() { return state.error },
+        refetch: () => state.fetch(true),
+        mutate: (data: DataT) => {
+            state.data = data;
+            state.lastUpdated = Date.now();
+            set(hash(cacheKey), data).catch(e => console.warn('[Cache Write Failed]', e));
+        }
     };
 }
 

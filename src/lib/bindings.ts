@@ -5,306 +5,322 @@
 
 
 export const commands = {
-    async playTrack(trackId: string): Promise<Result<null, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("play_track", { trackId }) };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
-    },
-    async play(): Promise<Result<null, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("play") };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
-    },
-    async pause(): Promise<Result<null, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("pause") };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
-    },
-    async stop(): Promise<Result<null, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("stop") };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
-    },
-    async next(): Promise<Result<null, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("next") };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
-    },
-    async prev(): Promise<Result<null, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("prev") };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
-    },
-    async seek(seconds: number): Promise<Result<null, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("seek", { seconds }) };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
-    },
-    async setVolume(volume: number): Promise<Result<null, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("set_volume", { volume }) };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
-    },
-    async setRepeat(mode: RepeatMode): Promise<Result<null, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("set_repeat", { mode }) };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
-    },
-    async toggleShuffle(): Promise<Result<boolean, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("toggle_shuffle") };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
-    },
-    async getPlayerState(): Promise<Result<PlayerState, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("get_player_state") };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
-    },
-    async getQueue(): Promise<Result<Queue, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("get_queue") };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
-    },
-    async addToQueue(trackId: string): Promise<Result<null, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("add_to_queue", { trackId }) };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
-    },
-    async addNext(trackId: string): Promise<Result<null, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("add_next", { trackId }) };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
-    },
-    async removeFromQueue(index: number): Promise<Result<null, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("remove_from_queue", { index }) };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
-    },
-    async clearQueue(): Promise<Result<null, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("clear_queue") };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
-    },
-    async playFromQueue(index: number): Promise<Result<null, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("play_from_queue", { index }) };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
-    },
-    async scanLibrary(): Promise<Result<null, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("scan_library") };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
-    },
-    async addLibraryRoot(path: string): Promise<Result<null, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("add_library_root", { path }) };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
-    },
-    async getPlaylists(providerId: string): Promise<Result<Playlist[], string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("get_playlists", { providerId }) };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
-    },
-    async createPlaylist(providerId: string, name: string): Promise<Result<Playlist, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("create_playlist", { providerId, name }) };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
-    },
-    async deletePlaylist(providerId: string, playlistId: string): Promise<Result<null, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("delete_playlist", { providerId, playlistId }) };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
-    },
-    async addToPlaylist(providerId: string, playlistId: string, trackId: string): Promise<Result<null, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("add_to_playlist", { providerId, playlistId, trackId }) };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
-    },
-    async removeFromPlaylist(providerId: string, playlistId: string, trackId: string): Promise<Result<null, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("remove_from_playlist", { providerId, playlistId, trackId }) };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
-    },
-    async getPlaylistTracks(providerId: string, playlistId: string): Promise<Result<Track[], string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("get_playlist_tracks", { providerId, playlistId }) };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
-    },
-    async getRecentAlbums(limit: number): Promise<Result<Album[], string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("get_recent_albums", { limit }) };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
-    },
-    async getFavorites(): Promise<Result<Track[], string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("get_favorites") };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
-    },
-    async search(query: string): Promise<Result<UnifiedSearchResult, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("search", { query }) };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
-    },
-    async getArtist(artistId: string): Promise<Result<Artist, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("get_artist", { artistId }) };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
-    },
-    async getArtistAlbums(artistId: string): Promise<Result<Album[], string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("get_artist_albums", { artistId }) };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
-    },
-    async getAlbumTracks(albumId: string): Promise<Result<Track[], string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("get_album_tracks", { albumId }) };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
-    },
-    async setFavorite(trackId: string, liked: boolean): Promise<Result<null, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("set_favorite", { trackId, liked }) };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
-    },
-    async addSource(source: SourceConfig): Promise<Result<null, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("add_source", { source }) };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
-    },
-    async deleteSource(sourceId: string): Promise<Result<null, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("delete_source", { sourceId }) };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
-    },
-    async getDefaultConfig(): Promise<AppConfig> {
-        return await TAURI_INVOKE("get_default_config");
-    },
-    async getAppConfig(): Promise<Result<AppConfig, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("get_app_config") };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
-    },
-    async saveAppConfig(config: AppConfig): Promise<Result<null, string>> {
-        try {
-            return { status: "ok", data: await TAURI_INVOKE("save_app_config", { config }) };
-        } catch (e) {
-            if (e instanceof Error) throw e;
-            else return { status: "error", error: e as any };
-        }
-    }
+async playTrack(trackId: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("play_track", { trackId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async play() : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("play") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async pause() : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("pause") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async stop() : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("stop") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async next() : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("next") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async prev() : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("prev") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async seek(seconds: number) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("seek", { seconds }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async setVolume(volume: number) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("set_volume", { volume }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async setRepeat(mode: RepeatMode) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("set_repeat", { mode }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async toggleShuffle() : Promise<Result<boolean, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("toggle_shuffle") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getPlayerState() : Promise<Result<PlayerState, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_player_state") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getQueue() : Promise<Result<Queue, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_queue") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async addToQueue(trackId: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("add_to_queue", { trackId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async addNext(trackId: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("add_next", { trackId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async removeFromQueue(index: number) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("remove_from_queue", { index }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async clearQueue() : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("clear_queue") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async playFromQueue(index: number) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("play_from_queue", { index }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async scanLibraries() : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("scan_libraries") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async scanLibrary(providerId: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("scan_library", { providerId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async addLibraryRoot(path: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("add_library_root", { path }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getPlaylists(providerId: string) : Promise<Result<Playlist[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_playlists", { providerId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async createPlaylist(providerId: string, name: string) : Promise<Result<Playlist, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("create_playlist", { providerId, name }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async deletePlaylist(providerId: string, playlistId: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("delete_playlist", { providerId, playlistId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async addToPlaylist(providerId: string, playlistId: string, trackId: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("add_to_playlist", { providerId, playlistId, trackId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async removeFromPlaylist(providerId: string, playlistId: string, trackId: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("remove_from_playlist", { providerId, playlistId, trackId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getPlaylistTracks(providerId: string, playlistId: string) : Promise<Result<Track[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_playlist_tracks", { providerId, playlistId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getRecentAlbums(limit: number) : Promise<Result<Album[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_recent_albums", { limit }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getFavorites() : Promise<Result<Track[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_favorites") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async search(query: string) : Promise<Result<UnifiedSearchResult, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("search", { query }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getArtist(artistId: string) : Promise<Result<Artist, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_artist", { artistId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getAlbum(albumId: string) : Promise<Result<Album, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_album", { albumId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getArtistAlbums(artistId: string) : Promise<Result<Album[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_artist_albums", { artistId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getAlbumTracks(albumId: string) : Promise<Result<Track[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_album_tracks", { albumId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async setFavorite(trackId: string, liked: boolean) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("set_favorite", { trackId, liked }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async addSource(source: SourceConfig) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("add_source", { source }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async deleteSource(sourceId: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("delete_source", { sourceId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async getDefaultConfig() : Promise<AppConfig> {
+    return await TAURI_INVOKE("get_default_config");
+},
+async getAppConfig() : Promise<Result<AppConfig, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_app_config") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async saveAppConfig(config: AppConfig) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("save_app_config", { config }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+}
 }
 
 /** user-defined events **/
 
 
 export const events = __makeEvents__<{
-    playerEvent: PlayerEvent
+playerEvent: PlayerEvent
 }>({
-    playerEvent: "player-event"
+playerEvent: "player-event"
 })
 
 /** user-defined constants **/
@@ -330,58 +346,59 @@ export type UnifiedSearchResult = { tracks: Track[]; albums: Album[]; artists: A
 /** tauri-specta globals **/
 
 import {
-    invoke as TAURI_INVOKE
+	invoke as TAURI_INVOKE,
+	Channel as TAURI_CHANNEL,
 } from "@tauri-apps/api/core";
 import * as TAURI_API_EVENT from "@tauri-apps/api/event";
 import { type WebviewWindow as __WebviewWindow__ } from "@tauri-apps/api/webviewWindow";
 
 type __EventObj__<T> = {
-    listen: (
-        cb: TAURI_API_EVENT.EventCallback<T>,
-    ) => ReturnType<typeof TAURI_API_EVENT.listen<T>>;
-    once: (
-        cb: TAURI_API_EVENT.EventCallback<T>,
-    ) => ReturnType<typeof TAURI_API_EVENT.once<T>>;
-    emit: null extends T
-    ? (payload?: T) => ReturnType<typeof TAURI_API_EVENT.emit>
-    : (payload: T) => ReturnType<typeof TAURI_API_EVENT.emit>;
+	listen: (
+		cb: TAURI_API_EVENT.EventCallback<T>,
+	) => ReturnType<typeof TAURI_API_EVENT.listen<T>>;
+	once: (
+		cb: TAURI_API_EVENT.EventCallback<T>,
+	) => ReturnType<typeof TAURI_API_EVENT.once<T>>;
+	emit: null extends T
+		? (payload?: T) => ReturnType<typeof TAURI_API_EVENT.emit>
+		: (payload: T) => ReturnType<typeof TAURI_API_EVENT.emit>;
 };
 
 export type Result<T, E> =
-    | { status: "ok"; data: T }
-    | { status: "error"; error: E };
+	| { status: "ok"; data: T }
+	| { status: "error"; error: E };
 
 function __makeEvents__<T extends Record<string, any>>(
-    mappings: Record<keyof T, string>,
+	mappings: Record<keyof T, string>,
 ) {
-    return new Proxy(
-        {} as unknown as {
-            [K in keyof T]: __EventObj__<T[K]> & {
-                (handle: __WebviewWindow__): __EventObj__<T[K]>;
-            };
-        },
-        {
-            get: (_, event) => {
-                const name = mappings[event as keyof T];
+	return new Proxy(
+		{} as unknown as {
+			[K in keyof T]: __EventObj__<T[K]> & {
+				(handle: __WebviewWindow__): __EventObj__<T[K]>;
+			};
+		},
+		{
+			get: (_, event) => {
+				const name = mappings[event as keyof T];
 
-                return new Proxy((() => { }) as any, {
-                    apply: (_, __, [window]: [__WebviewWindow__]) => ({
-                        listen: (arg: any) => window.listen(name, arg),
-                        once: (arg: any) => window.once(name, arg),
-                        emit: (arg: any) => window.emit(name, arg),
-                    }),
-                    get: (_, command: keyof __EventObj__<any>) => {
-                        switch (command) {
-                            case "listen":
-                                return (arg: any) => TAURI_API_EVENT.listen(name, arg);
-                            case "once":
-                                return (arg: any) => TAURI_API_EVENT.once(name, arg);
-                            case "emit":
-                                return (arg: any) => TAURI_API_EVENT.emit(name, arg);
-                        }
-                    },
-                });
-            },
-        },
-    );
+				return new Proxy((() => {}) as any, {
+					apply: (_, __, [window]: [__WebviewWindow__]) => ({
+						listen: (arg: any) => window.listen(name, arg),
+						once: (arg: any) => window.once(name, arg),
+						emit: (arg: any) => window.emit(name, arg),
+					}),
+					get: (_, command: keyof __EventObj__<any>) => {
+						switch (command) {
+							case "listen":
+								return (arg: any) => TAURI_API_EVENT.listen(name, arg);
+							case "once":
+								return (arg: any) => TAURI_API_EVENT.once(name, arg);
+							case "emit":
+								return (arg: any) => TAURI_API_EVENT.emit(name, arg);
+						}
+					},
+				});
+			},
+		},
+	);
 }

@@ -23,6 +23,7 @@ pub trait LibraryProvider: Send + Sync {
     async fn search(&self, query: &str) -> Result<UnifiedSearchResult, String>;
 
     async fn get_artist(&self, id: &str) -> Result<Artist, String>;
+    async fn get_album(&self, id: &str) -> Result<Album, String>;
     async fn get_artist_albums(&self, artist_id: &str) -> Result<Vec<Album>, String>;
     async fn get_album_tracks(&self, album_id: &str) -> Result<Vec<Track>, String>;
     async fn get_track(&self, track_id: &str) -> Result<Track, String>;

@@ -861,6 +861,10 @@ impl LibraryProvider for LocalProvider {
         let row = sqlx::query(r#"SELECT t.*, a.name as artist_name, al.title as album_title FROM tracks t LEFT JOIN artists a ON t.artist_id = a.id LEFT JOIN albums al ON t.album_id = al.id WHERE t.id = ?"#).bind(track_id).fetch_optional(&self.db).await.map_err(|e| e.to_string())?.ok_or("Track not found".to_string())?;
         Ok(map_row_to_track(row, Some(self.id.clone())))
     }
+    async fn get_album(&self, album_id: &str) -> Result<Album, String> {
+        let row = sqlx::query(r#"SELECT id, title, artist_id, year, cover_art, (SELECT name FROM artists WHERE id = albums.artist_id) as artist_name, (SELECT COUNT(*) FROM tracks WHERE album_id = albums.id) as track_count FROM albums WHERE id = ?"#).bind(album_id).fetch_optional(&self.db).await.map_err(|e| e.to_string())?.ok_or("Album not found".to_string())?;
+        Ok(map_row_to_album(row))
+    }
     async fn set_track_liked(&self, track_id: &str, liked: bool) -> Result<(), String> {
         sqlx::query("UPDATE tracks SET liked = ? WHERE id = ?")
             .bind(liked)
