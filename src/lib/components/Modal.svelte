@@ -2,6 +2,7 @@
   import type { Snippet } from "svelte";
   import { backOut, quintOut } from "svelte/easing";
   import { fade, scale } from "svelte/transition";
+  import { twMerge } from "tailwind-merge";
   import { lockScroll, trapFocus } from "../hooks";
   import Portal from "./Portal.svelte";
 
@@ -43,11 +44,11 @@
       ></button>
 
       <div
-        class="
-					relative w-full {maxWidth} max-h-[90vh] overflow-y-auto
-					bg-secondary text-text rounded-xl shadow-2xl border border-accent
-					focus:outline-none {className}
-				"
+        class={twMerge(
+          "relative w-full max-h-[90vh] overflow-y-auto bg-secondary text-text rounded-xl shadow-2xl border border-accent focus:outline-none",
+          maxWidth,
+          className
+        )}
         role="dialog"
         aria-modal="true"
         use:trapFocus={{ onClose: close }}

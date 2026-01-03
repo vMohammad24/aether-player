@@ -3,9 +3,10 @@
 @theme {
   --color-background: #0b0c10;
   --color-primary: #15171e;
-  --color-secondary: #1f2833;
+  --color-secondary: #1a1c24;
   --color-accent: #2b3540;
   --color-text: #c5c6c7;
+  --color-subtext: #808080;
   --color-border: #1f2833;
   --color-blue: #5e81ac;
   --color-mauve: #b48ead;
@@ -88,7 +89,7 @@
   select {
     @apply block w-full px-3 py-2 bg-primary border border-accent rounded-md text-text text-sm transition-all duration-200;
     @apply focus:outline-none focus:border-blue focus:ring-2 focus:ring-blue/20;
-    @apply placeholder:text-gray/50;
+    @apply placeholder:text-subtext/50;
   }
 
   input[type="checkbox"] {

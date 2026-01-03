@@ -98,7 +98,7 @@
         size={16}
         class="transition-colors duration-300 {isFocused
           ? 'text-cyan'
-          : 'text-gray'}"
+          : 'text-subtext'}"
       />
     </div>
 
@@ -110,7 +110,7 @@
       onfocus={() => (isFocused = true)}
       onblur={() => (isFocused = false)}
       class="w-full bg-secondary/50 border border-white/5 rounded-full py-2.5 pl-10 pr-4 text-sm text-text
-                   placeholder:text-gray/50 outline-none transition-all duration-300
+                   placeholder:text-subtext/50 outline-none transition-all duration-300
                    focus:bg-secondary focus:border-cyan/50"
     />
 
@@ -119,7 +119,7 @@
         class="absolute inset-y-0 right-4 flex items-center pointer-events-none"
       >
         <kbd
-          class="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-mono text-gray bg-white/5 rounded border border-white/10"
+          class="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-mono text-subtext bg-white/5 rounded border border-white/10"
         >
           Ctrl K
         </kbd>
@@ -133,21 +133,21 @@
     <div class="flex items-center gap-1">
       <button
         onclick={() => handleWindowAction("minimize")}
-        class="p-2 text-gray hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+        class="p-2 text-subtext hover:text-white hover:bg-white/5 rounded-lg transition-colors"
       >
         <Minus size={18} />
       </button>
 
       <button
         onclick={() => handleWindowAction("maximize")}
-        class="p-2 text-gray hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+        class="p-2 text-subtext hover:text-white hover:bg-white/5 rounded-lg transition-colors"
       >
         <Square size={16} />
       </button>
 
       <button
         onclick={() => handleWindowAction("close")}
-        class="p-2 text-gray hover:bg-red hover:text-white rounded-lg transition-colors"
+        class="p-2 text-subtext hover:bg-red hover:text-white rounded-lg transition-colors"
       >
         <X size={18} />
       </button>

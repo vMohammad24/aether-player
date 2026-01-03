@@ -148,7 +148,7 @@ export const toast = {
 
     promise: <T>(
         promise: Promise<T>,
-        msgs: { loading: string; success: string | ((data: T) => string); error: string | ((err: unknown) => string) },
+        msgs: { loading: string; success: string | ((data: T) => string); error: string | ((err: T) => string) },
         opts?: Partial<Toast>
     ) => {
         const id = toastState.add({ message: msgs.loading, type: 'loading', duration: 0, ...opts });

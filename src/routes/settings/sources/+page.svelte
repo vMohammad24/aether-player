@@ -1,0 +1,212 @@
+<script lang="ts">
+  import { commands, type SourceConfig } from "$lib/bindings";
+  import Button from "$lib/components/Button.svelte";
+  import Modal from "$lib/components/Modal.svelte";
+  import { config } from "$lib/stores/config.svelte";
+  import { confirm } from "$lib/stores/confirm.svelte";
+  import { toast } from "$lib/stores/toast.svelte";
+  import { Folder, Globe, Music2, Trash } from "@lucide/svelte";
+  import { open } from "@tauri-apps/plugin-dialog";
+
+  let showAddSourceModal = $state(false);
+  let newSourceType = $state<"local" | "subsonic">("local");
+  let localPath = $state("");
+  let localName = $state("My Music");
+  let isSubmitting = $state(false);
+
+  function generateId() {
+    return Math.random().toString(36).substring(2, 15);
+  }
+
+  async function handleAddSource() {
+    if (newSourceType === "local") {
+      if (!localPath) return toast.error("Path is required");
+
+      isSubmitting = true;
+      const newSource: SourceConfig = {
+        type: "local",
+        id: generateId(),
+        name: localName,
+        path: localPath,
+        enabled: true,
+      };
+
+      try {
+        const res = await commands.addSource(newSource);
+        if (res.status === "error") throw new Error(res.error);
+
+        await config.forceSync();
+        toast.success("Source added");
+        showAddSourceModal = false;
+        resetSourceForm();
+      } catch (e) {
+        toast.error(`Failed to add source: ${e}`);
+      } finally {
+        isSubmitting = false;
+      }
+    } else {
+      toast.error("Subsonic not fully implemented in UI yet");
+    }
+  }
+
+  async function handleDeleteSource(id: string) {
+    if (await confirm("Are you sure you want to remove this source?")) {
+      try {
+        const res = await commands.deleteSource(id);
+        if (res.status === "error") throw new Error(res.error);
+
+        await config.forceSync();
+        toast.success("Source removed");
+      } catch (e) {
+        toast.error(`Failed to remove source: ${e}`);
+      }
+    }
+  }
+
+  function resetSourceForm() {
+    localPath = "";
+    localName = "My Music";
+  }
+</script>
+
+<div class="flex items-center justify-between border-b border-white/10 pb-3">
+  <h2 class="text-xl font-semibold text-text">Library Sources</h2>
+  <Button onclick={() => (showAddSourceModal = true)} size="sm"
+    >Add Source</Button
+  >
+</div>
+
+<div class="grid gap-3">
+  {#each config.sources as source (source.id)}
+    <div
+      class="flex items-center justify-between p-4 bg-secondary rounded-xl border border-white/5 group hover:border-white/10 transition-colors"
+    >
+      <div class="flex items-center gap-4">
+        <div
+          class="h-10 w-10 rounded-full bg-accent/20 flex items-center justify-center text-accent"
+        >
+          {#if source.type === "local"}
+            <Folder size={20} />
+          {:else if source.type === "subsonic"}
+            <Globe size={20} />
+          {:else}
+            <Music2 size={20} />
+          {/if}
+        </div>
+        <div>
+          <h3 class="font-medium text-text">{source.name}</h3>
+          <p class="text-sm text-subtext break-all">
+            {source.type === "local"
+              ? source.path
+              : source.type === "subsonic"
+                ? source.url
+                : "Tidal"}
+          </p>
+        </div>
+      </div>
+
+      <Button
+        variant="ghost"
+        size="sm"
+        onclick={() => handleDeleteSource(source.id)}
+        class="text-subtext hover:text-red-400 h-10 w-10 p-0"
+        leftIcon={Trash}
+      ></Button>
+    </div>
+  {:else}
+    <div
+      class="text-center py-12 text-subtext border-2 border-dashed border-white/5 rounded-xl"
+    >
+      <p>No sources added yet.</p>
+      <Button
+        variant="ghost"
+        class="mt-2 text-accent"
+        onclick={() => (showAddSourceModal = true)}
+        >Add your first source</Button
+      >
+    </div>
+  {/each}
+</div>
+
+<Modal bind:show={showAddSourceModal} maxWidth="max-w-md">
+  <div class="p-6 space-y-6">
+    <h2 class="text-xl font-bold text-text">Add Library Source</h2>
+    <div class="flex p-1 bg-black/20 rounded-lg">
+      <button
+        class="flex-1 py-1.5 text-sm font-medium rounded-md transition-colors {newSourceType ===
+        'local'
+          ? 'bg-accent text-white'
+          : 'text-subtext hover:text-text'}"
+        onclick={() => (newSourceType = "local")}>Local Folder</button
+      >
+      <button
+        class="flex-1 py-1.5 text-sm font-medium rounded-md transition-colors {newSourceType ===
+        'subsonic'
+          ? 'bg-accent text-white'
+          : 'text-subtext hover:text-text'}"
+        onclick={() => (newSourceType = "subsonic")}>Subsonic</button
+      >
+    </div>
+
+    {#if newSourceType === "local"}
+      <div class="space-y-4">
+        <label class="flex flex-col gap-2">
+          <span class="text-sm font-medium text-subtext">Name</span>
+          <input
+            type="text"
+            bind:value={localName}
+            class="bg-black/20 border border-white/10 rounded-md p-2 text-text focus:border-accent focus:outline-none"
+            placeholder="My Music"
+          />
+        </label>
+        <label class="flex flex-col gap-2">
+          <span class="text-sm font-medium text-subtext">Folder Path</span>
+          <div class="relative">
+            <input
+              type="text"
+              bind:value={localPath}
+              class="bg-black/20 border border-white/10 rounded-md p-2 text-text focus:border-accent focus:outline-none"
+              placeholder="C:\Music"
+            />
+            {#if !localPath}
+              <Button
+                variant="ghost"
+                size="sm"
+                class="absolute right-2 top-1/2 -translate-y-1/2 px-3"
+                onclick={async () => {
+                  const path = await open({
+                    directory: true,
+                    multiple: false,
+                    title: "Select Music Folder",
+                    recursive: true,
+                  });
+                  if (path && typeof path === "string") {
+                    localPath = path;
+                  }
+                }}
+              >
+                Explore
+              </Button>
+            {/if}
+          </div>
+          <p class="text-xs text-subtext">
+            Absolute path to your music folder.
+          </p>
+        </label>
+      </div>
+    {:else}
+      <div class="text-center py-8 text-subtext">
+        Subsonic support coming soon.
+      </div>
+    {/if}
+
+    <div class="flex justify-end gap-3 pt-2">
+      <Button variant="ghost" onclick={() => (showAddSourceModal = false)}
+        >Cancel</Button
+      >
+      <Button onclick={handleAddSource} disabled={isSubmitting}>
+        {#if isSubmitting}Adding...{:else}Add Source{/if}
+      </Button>
+    </div>
+  </div>
+</Modal>

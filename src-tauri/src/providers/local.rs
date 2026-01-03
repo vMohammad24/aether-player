@@ -132,6 +132,10 @@ impl LocalProvider {
             CREATE INDEX IF NOT EXISTS idx_tracks_artist ON tracks(artist_id);
             CREATE INDEX IF NOT EXISTS idx_albums_artist ON albums(artist_id);
             CREATE INDEX IF NOT EXISTS idx_tracks_liked ON tracks(liked) WHERE liked = 1;
+
+            CREATE TABLE IF NOT EXISTS scan_found (
+                path TEXT PRIMARY KEY
+            );
             "#,
         )
         .execute(&self.db)
@@ -240,10 +244,10 @@ impl LocalProvider {
         });
 
         tokio::task::spawn_blocking(move || {
-            let walker = WalkDir::new(root).into_iter();
+            let walker = WalkDir::new(&root).follow_links(true).into_iter();
 
-            walker.par_bridge().for_each(|entry_res| {
-                if let Ok(entry) = entry_res {
+            walker.par_bridge().for_each(|entry_res| match entry_res {
+                Ok(entry) => {
                     if entry.file_type().is_file() {
                         let path = entry.path();
                         if let Some(ext) = path.extension() {
@@ -289,6 +293,9 @@ impl LocalProvider {
                             }
                         }
                     }
+                }
+                Err(e) => {
+                    log::error!("WalkDir error: {}", e);
                 }
             });
         })
@@ -855,11 +862,7 @@ impl LibraryProvider for LocalProvider {
         Ok(())
     }
 
-    async fn remove_from_playlist(
-        &self,
-        playlist_id: &str,
-        track_id: &str,
-    ) -> Result<(), String> {
+    async fn remove_from_playlist(&self, playlist_id: &str, track_id: &str) -> Result<(), String> {
         sqlx::query("DELETE FROM playlist_tracks WHERE playlist_id = ? AND track_id = ?")
             .bind(playlist_id)
             .bind(track_id)
@@ -898,11 +901,6 @@ impl LibraryProvider for LocalProvider {
             existing_map.insert(PathBuf::from(p), m);
         }
         let existing_map_arc = Arc::new(existing_map);
-
-        sqlx::query("CREATE TEMPORARY TABLE IF NOT EXISTS scan_found (path TEXT PRIMARY KEY)")
-            .execute(&self.db)
-            .await
-            .map_err(|e| e.to_string())?;
 
         sqlx::query("DELETE FROM scan_found")
             .execute(&self.db)

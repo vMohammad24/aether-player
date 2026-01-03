@@ -109,7 +109,7 @@
             <button
               onclick={() => toastState.remove(t.id)}
               class="
-                                text-gray
+                                text-subtext
                                 hover:text-white
                                 transition-colors -mt-1 -mr-1 rounded-md p-1
                                 hover:bg-secondary

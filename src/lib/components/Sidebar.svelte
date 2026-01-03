@@ -1,14 +1,18 @@
 <script lang="ts">
+  import { dev } from "$app/environment";
   import { page } from "$app/state";
   import {
     ChevronRight,
     CirclePlay,
+    Database,
     FileText,
     Folder,
     Headphones,
     House,
     Menu,
     Mic,
+    Palette,
+    Settings,
     X,
   } from "@lucide/svelte";
   import { onMount } from "svelte";
@@ -17,44 +21,67 @@
 
   let isOpen = $state(true);
   let isMobile = $state(false);
-  let expandedSections = $state<Record<string, boolean>>({ playlists: true });
+  let expandedSections = $state<Record<string, boolean>>({
+    playlists: true,
+    settings: true,
+  });
 
-  let config = $state([
-    {
-      id: "home",
-      label: "Home",
-      href: "/",
-      icon: House,
-      type: "single",
-      disabled: false,
-    },
-    {
-      id: "explore",
-      label: "Explore",
-      href: "/explore",
-      icon: FileText,
-      type: "single",
-    },
-    {
-      id: "feed",
-      label: "Feed",
-      href: "/feed",
-      icon: Mic,
-      type: "single",
-    },
-    {
-      id: "library",
-      label: "Your Library",
-      icon: Folder,
-      type: "section",
-      children: [
-        { label: "Liked Songs", href: "/library/liked", icon: Headphones },
-        { label: "Mix 1", href: "/playlist/1", icon: CirclePlay },
-        { label: "Mix 2", href: "/playlist/2", icon: CirclePlay },
-        { label: "Mix 3", href: "/playlist/3", icon: CirclePlay },
-      ],
-    },
-  ]);
+  let config = $state(
+    [
+      {
+        id: "home",
+        label: "Home",
+        href: "/",
+        icon: House,
+        type: "single",
+        disabled: false,
+      },
+      {
+        id: "explore",
+        label: "Explore",
+        href: "/explore",
+        icon: FileText,
+        type: "single",
+      },
+      {
+        id: "feed",
+        label: "Feed",
+        href: "/feed",
+        icon: Mic,
+        type: "single",
+      },
+      {
+        id: "library",
+        label: "Your Library",
+        icon: Folder,
+        type: "section",
+        children: [
+          { label: "Liked Songs", href: "/library/liked", icon: Headphones },
+          { label: "Mix 1", href: "/playlist/1", icon: CirclePlay },
+          { label: "Mix 2", href: "/playlist/2", icon: CirclePlay },
+          { label: "Mix 3", href: "/playlist/3", icon: CirclePlay },
+        ],
+      },
+      {
+        id: "settings",
+        label: "Settings",
+        icon: Settings,
+        type: "section",
+        children: [
+          { label: "General", href: "/settings/general", icon: Settings },
+          { label: "Sources", href: "/settings/sources", icon: Database },
+          { label: "Appearance", href: "/settings/appearance", icon: Palette },
+        ],
+      },
+      dev && {
+        id: "dev-playground",
+        label: "Playground",
+        href: "/playground",
+        icon: FileText,
+        type: "single",
+      },
+    ].filter((a) => typeof a !== "boolean")
+  );
 
   function toggleSection(sectionId: string) {
     if (!isOpen) {
@@ -177,7 +204,7 @@
         type="button"
         variant="ghost"
         onclick={() => (isOpen = !isOpen)}
-        class="p-2 hover:bg-white/5 rounded-lg text-gray hover:text-white transition-colors
+        class="p-2 hover:bg-white/5 rounded-lg text-subtext hover:text-white transition-colors
                     {isOpen ? '' : 'mx-auto'}"
       >
         {#if isMobile}
@@ -208,14 +235,14 @@
                 : 'hover:bg-white/5'}
                                 {page.url.pathname === item.href
                 ? 'bg-cyan/10 text-cyan'
-                : 'text-gray hover:text-text'}"
+                : 'text-subtext hover:text-text'}"
             >
               <item.icon
                 size={22}
                 class="transition-transform duration-300 {page.url.pathname ===
                 item.href
                   ? 'text-cyan'
-                  : 'text-gray group-hover:text-white'} 
+                  : 'text-subtext group-hover:text-white'} 
                                     {!isOpen && !item.disabled
                   ? 'group-hover:scale-110'
                   : ''}"
@@ -240,7 +267,7 @@
                                 {isOpen
                 ? 'px-4 py-3 justify-between'
                 : 'p-3 justify-center'}
-                                text-gray hover:text-text hover:bg-white/5 transition-all duration-300 group"
+                                text-subtext hover:text-text hover:bg-white/5 transition-all duration-300 group"
             >
               <div class="flex items-center gap-4">
                 <item.icon
@@ -273,7 +300,7 @@
                 {#each item.children as child}
                   <a
                     href={child.href}
-                    class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray hover:text-white hover:bg-white/5 rounded-r-lg transition-all
+                    class="flex items-center gap-3 px-4 py-2.5 text-sm text-subtext hover:text-white hover:bg-white/5 rounded-r-lg transition-all
                                             {page.url.pathname === child.href
                       ? 'text-cyan bg-cyan/5'
                       : ''}"
