@@ -7,6 +7,7 @@ use jwalk::WalkDir;
 use lofty::prelude::*;
 use lofty::read_from_path;
 use rayon::prelude::*;
+use sha2::{Digest, Sha256};
 use sqlx::{sqlite::SqlitePool, Row};
 use std::collections::HashMap;
 use std::fs;
@@ -14,7 +15,6 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::UNIX_EPOCH;
 use tokio::sync::mpsc;
-
 const BATCH_SIZE: usize = 200;
 const COVERS_DIR: &str = "covers";
 
@@ -354,7 +354,7 @@ async fn resolve_album(
     let new_id = uuid::Uuid::new_v4().to_string();
 
     let cover_path_str = if let Some(img_data) = cover_image {
-        match save_cover_art(covers_dir, artist_id, &new_id, img_data) {
+        match save_cover_art(covers_dir, img_data) {
             Ok(p) => Some(p),
             Err(e) => {
                 log::warn!("Failed to save cover art for {}: {}", title, e);
@@ -478,12 +478,7 @@ async fn flush_found(db: &SqlitePool, paths: &mut Vec<PathBuf>) {
     paths.clear();
 }
 
-fn save_cover_art(
-    base_dir: &Path,
-    artist_id: &str,
-    album_id: &str,
-    img_data: &CoverImageData,
-) -> Result<String> {
+fn save_cover_art(base_dir: &Path, img_data: &CoverImageData) -> Result<String> {
     let ext = match img_data.mime_type.as_str() {
         "image/jpeg" | "image/jpg" => "jpg",
         "image/png" => "png",
@@ -492,7 +487,12 @@ fn save_cover_art(
         _ => "jpg",
     };
 
-    let filename = format!("{}_{}.{}", artist_id, album_id, ext);
+    let mut hasher = Sha256::new();
+    hasher.update(&img_data.data);
+    let result = hasher.finalize();
+    let hash_string = format!("{:x}", result);
+
+    let filename = format!("{}.{}", hash_string, ext);
     let target_path = base_dir.join(&filename);
 
     if !target_path.exists() {

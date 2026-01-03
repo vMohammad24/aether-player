@@ -35,10 +35,9 @@ tauri-plugin-sql = { version = "2.3.1", features = ["sqlite"] }
 uuid = { version = "1.19.0", features = ["v4"] }
 sqlx = { version = "0.8.6", features = ["sqlite", "runtime-tokio-rustls", "macros", "chrono"] }
 dirs = "6.0.0"
-md5 = "0.8.0"
 chrono = { version = "0.4.42", features = ["serde"] }
 tauri-plugin-dialog = "2"
 rayon = "1.8"
-
+sha2 = "0.10"
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-single-instance = "2"
