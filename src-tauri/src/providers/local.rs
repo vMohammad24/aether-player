@@ -15,6 +15,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::UNIX_EPOCH;
 use tokio::sync::mpsc;
+
 const BATCH_SIZE: usize = 200;
 const COVERS_DIR: &str = "covers";
 
@@ -106,6 +107,22 @@ impl LocalProvider {
                 FOREIGN KEY(album_id) REFERENCES albums(id),
                 UNIQUE(path)
             );
+
+            CREATE TABLE IF NOT EXISTS track_artists (
+                track_id TEXT NOT NULL,
+                artist_id TEXT NOT NULL,
+                PRIMARY KEY(track_id, artist_id),
+                FOREIGN KEY(track_id) REFERENCES tracks(id) ON DELETE CASCADE,
+                FOREIGN KEY(artist_id) REFERENCES artists(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS album_artists (
+                album_id TEXT NOT NULL,
+                artist_id TEXT NOT NULL,
+                PRIMARY KEY(album_id, artist_id),
+                FOREIGN KEY(album_id) REFERENCES albums(id) ON DELETE CASCADE,
+                FOREIGN KEY(artist_id) REFERENCES artists(id) ON DELETE CASCADE
+            );
             
             CREATE TABLE IF NOT EXISTS library_roots (
                 path TEXT PRIMARY KEY
@@ -130,6 +147,8 @@ impl LocalProvider {
 
             CREATE INDEX IF NOT EXISTS idx_tracks_album ON tracks(album_id);
             CREATE INDEX IF NOT EXISTS idx_tracks_artist ON tracks(artist_id);
+            CREATE INDEX IF NOT EXISTS idx_track_artists_artist ON track_artists(artist_id);
+            CREATE INDEX IF NOT EXISTS idx_album_artists_artist ON album_artists(artist_id);
             CREATE INDEX IF NOT EXISTS idx_albums_artist ON albums(artist_id);
             CREATE INDEX IF NOT EXISTS idx_tracks_liked ON tracks(liked) WHERE liked = 1;
 
@@ -180,30 +199,54 @@ impl LocalProvider {
                         }
                     }
                     ScanResult::New(path, meta, mtime) => {
-                        let artist_name = meta.artist.clone();
-                        let artist_id = if let Some(id) = artist_cache.get(&artist_name) {
-                            id.clone()
-                        } else {
-                            match resolve_artist(&db, &artist_name).await {
-                                Ok(id) => {
-                                    artist_cache.insert(artist_name.clone(), id.clone());
-                                    id
-                                }
-                                Err(e) => {
-                                    log::error!("Failed to resolve artist {}: {}", artist_name, e);
-                                    continue;
+                        let mut track_artist_ids = Vec::new();
+                        for artist_name in &meta.artists {
+                            if let Some(id) = artist_cache.get(artist_name) {
+                                track_artist_ids.push(id.clone());
+                            } else {
+                                match resolve_artist_single(&db, artist_name).await {
+                                    Ok(id) => {
+                                        artist_cache.insert(artist_name.clone(), id.clone());
+                                        track_artist_ids.push(id);
+                                    }
+                                    Err(e) => {
+                                        log::error!(
+                                            "Failed to resolve artist {}: {}",
+                                            artist_name,
+                                            e
+                                        );
+                                    }
                                 }
                             }
-                        };
+                        }
 
-                        let album_key = format!("{}::{}", artist_id, meta.album);
+                        if track_artist_ids.is_empty() {
+                            let unknown_name = "Unknown Artist".to_string();
+                            if let Ok(id) = resolve_artist_single(&db, &unknown_name).await {
+                                track_artist_ids.push(id);
+                            }
+                        }
+
+                        let primary_artist_id =
+                            track_artist_ids.first().cloned().unwrap_or_default();
+
+                        let album_artist_name =
+                            meta.album_artist.as_ref().unwrap_or(&meta.artists[0]);
+                        let album_artist_id =
+                            match resolve_artist_single(&db, album_artist_name).await {
+                                Ok(id) => id,
+                                Err(_) => primary_artist_id.clone(),
+                            };
+                        let album_key = format!("{}::{}", album_artist_id, meta.album);
+
                         let album_id = if let Some(id) = album_cache.get(&album_key) {
                             id.clone()
                         } else {
                             match resolve_album(
                                 &db,
                                 &meta.album,
-                                &artist_id,
+                                &album_artist_id,
+                                &track_artist_ids,
                                 &meta.cover_image,
                                 &covers_dir,
                             )
@@ -221,7 +264,7 @@ impl LocalProvider {
                         };
 
                         pending_found.push(path.clone());
-                        pending_tracks.push((path, meta, artist_id, album_id, mtime));
+                        pending_tracks.push((path, meta, track_artist_ids, album_id, mtime));
 
                         if pending_tracks.len() >= BATCH_SIZE {
                             flush_tracks(&db, &mut pending_tracks).await;
@@ -306,9 +349,11 @@ impl LocalProvider {
     }
 }
 
-async fn resolve_artist(db: &SqlitePool, name: &str) -> Result<String> {
-    let existing = sqlx::query("SELECT id FROM artists WHERE name = ?")
-        .bind(name)
+async fn resolve_artist_single(db: &SqlitePool, name: &str) -> Result<String> {
+    let name_trimmed = name.trim();
+
+    let existing = sqlx::query("SELECT id, name FROM artists WHERE name = ? COLLATE NOCASE")
+        .bind(name_trimmed)
         .fetch_optional(db)
         .await?;
 
@@ -317,17 +362,18 @@ async fn resolve_artist(db: &SqlitePool, name: &str) -> Result<String> {
     }
 
     let new_id = uuid::Uuid::new_v4().to_string();
+
     let res = sqlx::query("INSERT OR IGNORE INTO artists (id, name) VALUES (?, ?)")
         .bind(&new_id)
-        .bind(name)
+        .bind(name_trimmed)
         .execute(db)
         .await?;
 
     if res.rows_affected() > 0 {
         Ok(new_id)
     } else {
-        let row = sqlx::query("SELECT id FROM artists WHERE name = ?")
-            .bind(name)
+        let row = sqlx::query("SELECT id FROM artists WHERE name = ? COLLATE NOCASE")
+            .bind(name_trimmed)
             .fetch_one(db)
             .await?;
         Ok(row.get("id"))
@@ -337,59 +383,69 @@ async fn resolve_artist(db: &SqlitePool, name: &str) -> Result<String> {
 async fn resolve_album(
     db: &SqlitePool,
     title: &str,
-    artist_id: &str,
+    primary_artist_id: &str,
+    all_artist_ids: &[String],
     cover_image: &Option<CoverImageData>,
     covers_dir: &Path,
 ) -> Result<String> {
     let existing = sqlx::query("SELECT id FROM albums WHERE title = ? AND artist_id = ?")
         .bind(title)
-        .bind(artist_id)
+        .bind(primary_artist_id)
         .fetch_optional(db)
         .await?;
 
-    if let Some(row) = existing {
-        return Ok(row.get("id"));
-    }
-
-    let new_id = uuid::Uuid::new_v4().to_string();
-
-    let cover_path_str = if let Some(img_data) = cover_image {
-        match save_cover_art(covers_dir, img_data) {
-            Ok(p) => Some(p),
-            Err(e) => {
-                log::warn!("Failed to save cover art for {}: {}", title, e);
-                None
-            }
-        }
+    let album_id = if let Some(row) = existing {
+        row.get("id")
     } else {
-        None
+        let new_id = uuid::Uuid::new_v4().to_string();
+        let cover_path_str = if let Some(img_data) = cover_image {
+            match save_cover_art(covers_dir, img_data) {
+                Ok(p) => Some(p),
+                Err(e) => {
+                    log::warn!("Failed to save cover art for {}: {}", title, e);
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
+        let res = sqlx::query(
+            "INSERT OR IGNORE INTO albums (id, title, artist_id, cover_art) VALUES (?, ?, ?, ?)",
+        )
+        .bind(&new_id)
+        .bind(title)
+        .bind(primary_artist_id)
+        .bind(cover_path_str)
+        .execute(db)
+        .await?;
+
+        if res.rows_affected() > 0 {
+            new_id
+        } else {
+            let row = sqlx::query("SELECT id FROM albums WHERE title = ? AND artist_id = ?")
+                .bind(title)
+                .bind(primary_artist_id)
+                .fetch_one(db)
+                .await?;
+            row.get("id")
+        }
     };
 
-    let res = sqlx::query(
-        "INSERT OR IGNORE INTO albums (id, title, artist_id, cover_art) VALUES (?, ?, ?, ?)",
-    )
-    .bind(&new_id)
-    .bind(title)
-    .bind(artist_id)
-    .bind(cover_path_str)
-    .execute(db)
-    .await?;
-
-    if res.rows_affected() > 0 {
-        Ok(new_id)
-    } else {
-        let row = sqlx::query("SELECT id FROM albums WHERE title = ? AND artist_id = ?")
-            .bind(title)
+    for artist_id in all_artist_ids {
+        sqlx::query("INSERT OR IGNORE INTO album_artists (album_id, artist_id) VALUES (?, ?)")
+            .bind(&album_id)
             .bind(artist_id)
-            .fetch_one(db)
+            .execute(db)
             .await?;
-        Ok(row.get("id"))
     }
+
+    Ok(album_id)
 }
 
 async fn flush_tracks(
     db: &SqlitePool,
-    tracks: &mut Vec<(PathBuf, ParsedMetadata, String, String, i64)>,
+    tracks: &mut Vec<(PathBuf, ParsedMetadata, Vec<String>, String, i64)>,
 ) {
     if tracks.is_empty() {
         return;
@@ -403,9 +459,10 @@ async fn flush_tracks(
         }
     };
 
-    for (path, meta, artist_id, album_id, mtime) in tracks.iter() {
+    for (path, meta, artist_ids, album_id, mtime) in tracks.iter() {
         let track_id = uuid::Uuid::new_v4().to_string();
         let path_str = path.to_string_lossy().to_string();
+        let primary_artist = artist_ids.first().cloned().unwrap_or_default();
 
         let q = sqlx::query(
             r#"INSERT INTO tracks 
@@ -428,7 +485,7 @@ async fn flush_tracks(
         .bind(&track_id)
         .bind(&path_str)
         .bind(&meta.title)
-        .bind(artist_id)
+        .bind(&primary_artist)
         .bind(album_id)
         .bind(meta.duration)
         .bind(meta.track_number)
@@ -440,6 +497,36 @@ async fn flush_tracks(
 
         if let Err(e) = q.execute(&mut *tx).await {
             log::error!("Failed to insert track {}: {}", path_str, e);
+            continue;
+        }
+
+        let actual_track_id = if sqlx::query("SELECT 1").execute(&mut *tx).await.is_ok() {
+            match sqlx::query("SELECT id FROM tracks WHERE path = ?")
+                .bind(&path_str)
+                .fetch_one(&mut *tx)
+                .await
+            {
+                Ok(row) => row.get::<String, _>("id"),
+                Err(_) => track_id.clone(),
+            }
+        } else {
+            track_id.clone()
+        };
+
+        let _ = sqlx::query("DELETE FROM track_artists WHERE track_id = ?")
+            .bind(&actual_track_id)
+            .execute(&mut *tx)
+            .await;
+
+        for artist_id in artist_ids {
+            let jq = sqlx::query(
+                "INSERT OR IGNORE INTO track_artists (track_id, artist_id) VALUES (?, ?)",
+            )
+            .bind(&actual_track_id)
+            .bind(artist_id);
+            if let Err(e) = jq.execute(&mut *tx).await {
+                log::error!("Failed to link artist to track: {}", e);
+            }
         }
     }
 
@@ -454,27 +541,19 @@ async fn flush_found(db: &SqlitePool, paths: &mut Vec<PathBuf>) {
     if paths.is_empty() {
         return;
     }
-
     let mut tx = match db.begin().await {
         Ok(t) => t,
         Err(e) => {
-            log::error!("Failed to begin transaction for found paths: {}", e);
+            log::error!("Transaction error: {}", e);
             return;
         }
     };
-
     for path in paths.iter() {
         let path_str = path.to_string_lossy().to_string();
         let q = sqlx::query("INSERT OR IGNORE INTO scan_found (path) VALUES (?)").bind(path_str);
-
-        if let Err(e) = q.execute(&mut *tx).await {
-            log::error!("Failed to record found path: {}", e);
-        }
+        let _ = q.execute(&mut *tx).await;
     }
-
-    if let Err(e) = tx.commit().await {
-        log::error!("Failed to commit found paths: {}", e);
-    }
+    let _ = tx.commit().await;
     paths.clear();
 }
 
@@ -486,19 +565,14 @@ fn save_cover_art(base_dir: &Path, img_data: &CoverImageData) -> Result<String> 
         "image/webp" => "webp",
         _ => "jpg",
     };
-
     let mut hasher = Sha256::new();
     hasher.update(&img_data.data);
-    let result = hasher.finalize();
-    let hash_string = format!("{:x}", result);
-
+    let hash_string = format!("{:x}", hasher.finalize());
     let filename = format!("{}.{}", hash_string, ext);
     let target_path = base_dir.join(&filename);
-
     if !target_path.exists() {
         fs::write(&target_path, &img_data.data)?;
     }
-
     Ok(filename)
 }
 
@@ -509,7 +583,8 @@ struct CoverImageData {
 
 struct ParsedMetadata {
     title: String,
-    artist: String,
+    artists: Vec<String>,
+    album_artist: Option<String>,
     album: String,
     duration: u32,
     track_number: Option<u32>,
@@ -520,9 +595,22 @@ struct ParsedMetadata {
     cover_image: Option<CoverImageData>,
 }
 
+fn split_artists(raw: &str) -> Vec<String> {
+    let raw = raw.replace(" feat. ", ";");
+    let raw = raw.replace(" ft. ", ";");
+    let raw = raw.replace(" & ", ";");
+    let raw = raw.replace(" / ", ";");
+
+    let raw = raw.replace(", ", ";");
+
+    raw.split(';')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect()
+}
+
 fn parse_metadata(path: &Path) -> Result<ParsedMetadata> {
     let tagged_file = read_from_path(path).map_err(|e| anyhow!("Lofty read error: {}", e))?;
-
     let properties = tagged_file.properties();
     let duration = properties.duration().as_secs() as u32;
     let bitrate = properties.audio_bitrate();
@@ -533,7 +621,7 @@ fn parse_metadata(path: &Path) -> Result<ParsedMetadata> {
         .to_string_lossy()
         .to_string();
     let mut title = filename_str.clone();
-    let mut artist = "Unknown Artist".to_string();
+    let mut artists = vec!["Unknown Artist".to_string()];
     let mut album = "Unknown Album".to_string();
 
     let mut track_number = None;
@@ -541,7 +629,7 @@ fn parse_metadata(path: &Path) -> Result<ParsedMetadata> {
     let mut year = None;
     let mut genre = None;
     let mut cover_image = None;
-
+    let mut album_artist = None;
     if let Some(tag) = tagged_file.primary_tag().or(tagged_file.first_tag()) {
         if let Some(t) = tag.title() {
             if !t.trim().is_empty() {
@@ -550,7 +638,7 @@ fn parse_metadata(path: &Path) -> Result<ParsedMetadata> {
         }
         if let Some(a) = tag.artist() {
             if !a.trim().is_empty() {
-                artist = a.trim().to_string();
+                artists = split_artists(&a);
             }
         }
         if let Some(a) = tag.album() {
@@ -558,7 +646,6 @@ fn parse_metadata(path: &Path) -> Result<ParsedMetadata> {
                 album = a.trim().to_string();
             }
         }
-
         track_number = tag.track();
         disc_number = tag.disk();
         if let Some(y) = tag.year() {
@@ -569,6 +656,11 @@ fn parse_metadata(path: &Path) -> Result<ParsedMetadata> {
                 genre = Some(g.trim().to_string());
             }
         }
+        if let Some(aa) = tag.get_string(&ItemKey::AlbumArtist) {
+            if !aa.trim().is_empty() {
+                album_artist = Some(aa.trim().to_string());
+            }
+        }
 
         let pictures = tag.pictures();
         if !pictures.is_empty() {
@@ -576,7 +668,6 @@ fn parse_metadata(path: &Path) -> Result<ParsedMetadata> {
                 .iter()
                 .find(|p| p.pic_type() == lofty::picture::PictureType::CoverFront)
                 .or_else(|| pictures.first());
-
             if let Some(p) = pic {
                 cover_image = Some(CoverImageData {
                     data: p.data().to_vec(),
@@ -589,16 +680,16 @@ fn parse_metadata(path: &Path) -> Result<ParsedMetadata> {
         }
     }
 
-    if artist == "Unknown Artist" {
+    if artists.len() == 1 && artists[0] == "Unknown Artist" {
         let parts: Vec<&str> = filename_str.split(" - ").collect();
         match parts.len() {
             3 => {
-                artist = parts[0].trim().to_string();
+                artists = split_artists(parts[0]);
                 album = parts[1].trim().to_string();
                 title = parts[2].trim().to_string();
             }
             2 => {
-                artist = parts[0].trim().to_string();
+                artists = split_artists(parts[0]);
                 title = parts[1].trim().to_string();
             }
             _ => {}
@@ -607,8 +698,9 @@ fn parse_metadata(path: &Path) -> Result<ParsedMetadata> {
 
     Ok(ParsedMetadata {
         title,
-        artist,
+        artists,
         album,
+        album_artist,
         duration,
         track_number,
         disc_number,
@@ -628,10 +720,45 @@ impl LibraryProvider for LocalProvider {
         "Local Library"
     }
 
+    async fn get_artist_albums(&self, artist_id: &str) -> Result<Vec<Album>, String> {
+        let rows = sqlx::query(
+            r#"SELECT DISTINCT al.id, al.title, al.artist_id, al.year, al.cover_art, 
+                (SELECT name FROM artists WHERE id = al.artist_id) as artist_name,
+                (SELECT COUNT(*) FROM tracks WHERE album_id = al.id) as track_count
+            FROM albums al
+            JOIN album_artists aa ON al.id = aa.album_id
+            WHERE aa.artist_id = ? 
+            ORDER BY al.year DESC"#,
+        )
+        .bind(artist_id)
+        .fetch_all(&self.db)
+        .await
+        .map_err(|e| e.to_string())?;
+        Ok(rows.into_iter().map(map_row_to_album).collect())
+    }
+
+    async fn get_album_tracks(&self, album_id: &str) -> Result<Vec<Track>, String> {
+        let rows = sqlx::query(
+            r#"SELECT t.*, a.name as artist_name, al.title as album_title
+            FROM tracks t
+            LEFT JOIN artists a ON t.artist_id = a.id
+            LEFT JOIN albums al ON t.album_id = al.id
+            WHERE t.album_id = ? 
+            ORDER BY t.disc_number ASC, t.track_number ASC"#,
+        )
+        .bind(album_id)
+        .fetch_all(&self.db)
+        .await
+        .map_err(|e| e.to_string())?;
+        Ok(rows
+            .into_iter()
+            .map(|r| map_row_to_track(r, Some(self.id.clone())))
+            .collect())
+    }
+
     async fn get_recent_albums(&self, limit: u32) -> Result<Vec<Album>, String> {
         let rows = sqlx::query(
-            r#"SELECT 
-                id, title, artist_id, year, cover_art, 
+            r#"SELECT id, title, artist_id, year, cover_art, 
                 (SELECT name FROM artists WHERE id = albums.artist_id) as artist_name,
                 (SELECT COUNT(*) FROM tracks WHERE album_id = albums.id) as track_count
             FROM albums 
@@ -641,7 +768,6 @@ impl LibraryProvider for LocalProvider {
         .fetch_all(&self.db)
         .await
         .map_err(|e| e.to_string())?;
-
         Ok(rows.into_iter().map(map_row_to_album).collect())
     }
 
@@ -667,7 +793,7 @@ impl LibraryProvider for LocalProvider {
         let pattern = format!("%{}%", query);
 
         let tracks_future = sqlx::query(
-            r#"SELECT t.*, a.name as artist_name, al.title as album_title 
+            r#"SELECT DISTINCT t.*, a.name as artist_name, al.title as album_title 
                FROM tracks t 
                LEFT JOIN artists a ON t.artist_id = a.id
                LEFT JOIN albums al ON t.album_id = al.id
@@ -731,55 +857,10 @@ impl LibraryProvider for LocalProvider {
             image_url: row.try_get("image_url").unwrap_or_default(),
         })
     }
-
-    async fn get_artist_albums(&self, artist_id: &str) -> Result<Vec<Album>, String> {
-        let rows = sqlx::query(
-            r#"SELECT id, title, artist_id, year, cover_art, 
-                (SELECT name FROM artists WHERE id = albums.artist_id) as artist_name,
-                (SELECT COUNT(*) FROM tracks WHERE album_id = albums.id) as track_count
-            FROM albums WHERE artist_id = ? ORDER BY year DESC"#,
-        )
-        .bind(artist_id)
-        .fetch_all(&self.db)
-        .await
-        .map_err(|e| e.to_string())?;
-        Ok(rows.into_iter().map(map_row_to_album).collect())
-    }
-
-    async fn get_album_tracks(&self, album_id: &str) -> Result<Vec<Track>, String> {
-        let rows = sqlx::query(
-            r#"SELECT t.*, a.name as artist_name, al.title as album_title
-            FROM tracks t
-            LEFT JOIN artists a ON t.artist_id = a.id
-            LEFT JOIN albums al ON t.album_id = al.id
-            WHERE t.album_id = ? ORDER BY t.disc_number ASC, t.track_number ASC"#,
-        )
-        .bind(album_id)
-        .fetch_all(&self.db)
-        .await
-        .map_err(|e| e.to_string())?;
-        Ok(rows
-            .into_iter()
-            .map(|r| map_row_to_track(r, Some(self.id.clone())))
-            .collect())
-    }
-
     async fn get_track(&self, track_id: &str) -> Result<Track, String> {
-        let row = sqlx::query(
-            r#"SELECT t.*, a.name as artist_name, al.title as album_title 
-               FROM tracks t 
-               LEFT JOIN artists a ON t.artist_id = a.id
-               LEFT JOIN albums al ON t.album_id = al.id
-               WHERE t.id = ?"#,
-        )
-        .bind(track_id)
-        .fetch_optional(&self.db)
-        .await
-        .map_err(|e| e.to_string())?
-        .ok_or("Track not found".to_string())?;
+        let row = sqlx::query(r#"SELECT t.*, a.name as artist_name, al.title as album_title FROM tracks t LEFT JOIN artists a ON t.artist_id = a.id LEFT JOIN albums al ON t.album_id = al.id WHERE t.id = ?"#).bind(track_id).fetch_optional(&self.db).await.map_err(|e| e.to_string())?.ok_or("Track not found".to_string())?;
         Ok(map_row_to_track(row, Some(self.id.clone())))
     }
-
     async fn set_track_liked(&self, track_id: &str, liked: bool) -> Result<(), String> {
         sqlx::query("UPDATE tracks SET liked = ? WHERE id = ?")
             .bind(liked)
@@ -789,16 +870,8 @@ impl LibraryProvider for LocalProvider {
             .map_err(|e| e.to_string())?;
         Ok(())
     }
-
     async fn get_playlists(&self) -> Result<Vec<Playlist>, String> {
-        let rows = sqlx::query(
-            r#"SELECT p.*, (SELECT COUNT(*) FROM playlist_tracks WHERE playlist_id = p.id) as track_count 
-               FROM playlists p 
-               ORDER BY created_at DESC"#
-        )
-        .fetch_all(&self.db)
-        .await
-        .map_err(|e| e.to_string())?;
+        let rows = sqlx::query(r#"SELECT p.*, (SELECT COUNT(*) FROM playlist_tracks WHERE playlist_id = p.id) as track_count FROM playlists p ORDER BY created_at DESC"#).fetch_all(&self.db).await.map_err(|e| e.to_string())?;
         Ok(rows
             .into_iter()
             .map(|row| Playlist {
@@ -811,7 +884,6 @@ impl LibraryProvider for LocalProvider {
             })
             .collect())
     }
-
     async fn create_playlist(&self, name: &str) -> Result<Playlist, String> {
         let id = uuid::Uuid::new_v4().to_string();
         let now = Utc::now();
@@ -831,7 +903,6 @@ impl LibraryProvider for LocalProvider {
             created_at: now,
         })
     }
-
     async fn delete_playlist(&self, id: &str) -> Result<(), String> {
         sqlx::query("DELETE FROM playlists WHERE id = ?")
             .bind(id)
@@ -840,7 +911,6 @@ impl LibraryProvider for LocalProvider {
             .map_err(|e| e.to_string())?;
         Ok(())
     }
-
     async fn add_to_playlist(&self, playlist_id: &str, track_id: &str) -> Result<(), String> {
         let row = sqlx::query(
             "SELECT MAX(position) as max_pos FROM playlist_tracks WHERE playlist_id = ?",
@@ -849,19 +919,10 @@ impl LibraryProvider for LocalProvider {
         .fetch_one(&self.db)
         .await
         .map_err(|e| e.to_string())?;
-
         let position: i32 = row.try_get("max_pos").unwrap_or(0) + 1;
-
-        sqlx::query("INSERT OR IGNORE INTO playlist_tracks (playlist_id, track_id, position) VALUES (?, ?, ?)")
-            .bind(playlist_id)
-            .bind(track_id)
-            .bind(position)
-            .execute(&self.db)
-            .await
-            .map_err(|e| e.to_string())?;
+        sqlx::query("INSERT OR IGNORE INTO playlist_tracks (playlist_id, track_id, position) VALUES (?, ?, ?)").bind(playlist_id).bind(track_id).bind(position).execute(&self.db).await.map_err(|e| e.to_string())?;
         Ok(())
     }
-
     async fn remove_from_playlist(&self, playlist_id: &str, track_id: &str) -> Result<(), String> {
         sqlx::query("DELETE FROM playlist_tracks WHERE playlist_id = ? AND track_id = ?")
             .bind(playlist_id)
@@ -871,7 +932,6 @@ impl LibraryProvider for LocalProvider {
             .map_err(|e| e.to_string())?;
         Ok(())
     }
-
     async fn resolve_stream(&self, track_id: &str) -> Result<AudioStream, String> {
         let row = sqlx::query("SELECT path FROM tracks WHERE id = ?")
             .bind(track_id)
@@ -881,18 +941,15 @@ impl LibraryProvider for LocalProvider {
             .ok_or("Track not found".to_string())?;
         Ok(AudioStream::Url(row.get("path")))
     }
-
     async fn scan(&self) -> Result<(), String> {
         let rows = sqlx::query("SELECT path FROM library_roots")
             .fetch_all(&self.db)
             .await
             .map_err(|e| e.to_string())?;
-
         let existing_tracks_rows = sqlx::query("SELECT path, mtime FROM tracks")
             .fetch_all(&self.db)
             .await
             .map_err(|e| e.to_string())?;
-
         let mut existing_map: HashMap<PathBuf, i64> =
             HashMap::with_capacity(existing_tracks_rows.len());
         for row in existing_tracks_rows {
@@ -901,35 +958,23 @@ impl LibraryProvider for LocalProvider {
             existing_map.insert(PathBuf::from(p), m);
         }
         let existing_map_arc = Arc::new(existing_map);
-
         sqlx::query("DELETE FROM scan_found")
             .execute(&self.db)
             .await
             .map_err(|e| e.to_string())?;
-
         for row in rows {
             let path: String = row.get("path");
             if let Err(e) = self.scan_path(&path, existing_map_arc.clone()).await {
                 log::error!("Scan failed for root {}: {}", path, e);
-
                 return Err(format!("Scan failed for root {}: {}", path, e));
             }
         }
-
-        let prune_res =
-            sqlx::query("DELETE FROM tracks WHERE path NOT IN (SELECT path FROM scan_found)")
-                .execute(&self.db)
-                .await;
-
-        if let Err(e) = prune_res {
-            log::error!("Pruning failed: {}", e);
-        }
-
+        let _ = sqlx::query("DELETE FROM tracks WHERE path NOT IN (SELECT path FROM scan_found)")
+            .execute(&self.db)
+            .await;
         let _ = sqlx::query("PRAGMA optimize").execute(&self.db).await;
-
         Ok(())
     }
-
     async fn add_root(&self, path: &str) -> Result<(), String> {
         sqlx::query("INSERT OR IGNORE INTO library_roots (path) VALUES (?)")
             .bind(path)
@@ -938,22 +983,8 @@ impl LibraryProvider for LocalProvider {
             .map_err(|e| e.to_string())?;
         Ok(())
     }
-
     async fn get_playlist_tracks(&self, playlist_id: &str) -> Result<Vec<Track>, String> {
-        let rows = sqlx::query(
-            r#"SELECT t.*, a.name as artist_name, al.title as album_title
-            FROM playlist_tracks pt
-            JOIN tracks t ON pt.track_id = t.id
-            LEFT JOIN artists a ON t.artist_id = a.id
-            LEFT JOIN albums al ON t.album_id = al.id
-            WHERE pt.playlist_id = ?
-            ORDER BY pt.position ASC"#,
-        )
-        .bind(playlist_id)
-        .fetch_all(&self.db)
-        .await
-        .map_err(|e| e.to_string())?;
-
+        let rows = sqlx::query(r#"SELECT t.*, a.name as artist_name, al.title as album_title FROM playlist_tracks pt JOIN tracks t ON pt.track_id = t.id LEFT JOIN artists a ON t.artist_id = a.id LEFT JOIN albums al ON t.album_id = al.id WHERE pt.playlist_id = ? ORDER BY pt.position ASC"#).bind(playlist_id).fetch_all(&self.db).await.map_err(|e| e.to_string())?;
         Ok(rows
             .into_iter()
             .map(|r| map_row_to_track(r, Some(self.id.clone())))

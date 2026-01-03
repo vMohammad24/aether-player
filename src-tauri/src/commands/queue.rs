@@ -13,14 +13,12 @@ pub async fn get_queue(state: State<'_, AppState>) -> Result<Queue, String> {
 pub async fn add_to_queue(
     state: State<'_, AppState>,
     track_id: String,
-    provider_id: String,
 ) -> Result<(), String> {
-    let provider = state
+    let track = state
         .queue
-        .get_provider(&provider_id)
+        .get_track(&track_id)
         .await
-        .ok_or("Provider not found".to_string())?;
-    let track = provider.get_track(&track_id).await?;
+        .ok_or("Track not found in any provider".to_string())?;
     state.queue.add_track(track).await;
     Ok(())
 }
@@ -30,14 +28,12 @@ pub async fn add_to_queue(
 pub async fn add_next(
     state: State<'_, AppState>,
     track_id: String,
-    provider_id: String,
 ) -> Result<(), String> {
-    let provider = state
+    let track = state
         .queue
-        .get_provider(&provider_id)
+        .get_track(&track_id)
         .await
-        .ok_or("Provider not found".to_string())?;
-    let track = provider.get_track(&track_id).await?;
+        .ok_or("Track not found in any provider".to_string())?;
     state.queue.add_next(track).await;
     Ok(())
 }

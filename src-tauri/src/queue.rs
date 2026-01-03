@@ -52,6 +52,20 @@ impl QueueManager {
         self.providers.read().await.get(id).cloned()
     }
 
+    pub async fn get_providers(&self) -> HashMap<String, Arc<dyn LibraryProvider>> {
+        self.providers.read().await.clone()
+    }
+
+    pub async fn get_track(&self, track_id: &str) -> Option<Track> {
+        let providers = self.providers.read().await;
+        for provider in providers.values() {
+            if let Ok(track) = provider.get_track(track_id).await {
+                return Some(track);
+            }
+        }
+        None
+    }
+
     pub async fn add_provider(&self, provider: Arc<dyn LibraryProvider>) {
         self.providers
             .write()

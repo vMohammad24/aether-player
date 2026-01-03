@@ -96,28 +96,29 @@ pub async fn delete_source(
 
 #[tauri::command]
 #[specta::specta]
-pub async fn scan_library(state: State<'_, AppState>, provider_id: String) -> Result<(), String> {
-    let provider = state
-        .queue
-        .get_provider(&provider_id)
-        .await
-        .ok_or("Provider not found".to_string())?;
-    provider.scan().await
+pub async fn scan_library(state: State<'_, AppState>) -> Result<(), String> {
+    let providers = state.queue.get_providers().await;
+    for provider in providers.values() {
+        let _ = provider.scan().await;
+    }
+    Ok(())
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn add_library_root(
-    state: State<'_, AppState>,
-    provider_id: String,
-    path: String,
-) -> Result<(), String> {
-    let provider = state
-        .queue
-        .get_provider(&provider_id)
-        .await
-        .ok_or("Provider not found".to_string())?;
-    provider.add_root(&path).await
+pub async fn add_library_root(state: State<'_, AppState>, path: String) -> Result<(), String> {
+    let providers = state.queue.get_providers().await;
+    let mut success = false;
+    for provider in providers.values() {
+        if provider.add_root(&path).await.is_ok() {
+            success = true;
+        }
+    }
+    if success {
+        Ok(())
+    } else {
+        Err("No provider supported adding root or all failed".to_string())
+    }
 }
 
 #[tauri::command]
@@ -215,103 +216,104 @@ pub async fn get_playlist_tracks(
 #[specta::specta]
 pub async fn get_recent_albums(
     state: State<'_, AppState>,
-    provider_id: String,
     limit: u32,
 ) -> Result<Vec<Album>, String> {
-    let provider = state
-        .queue
-        .get_provider(&provider_id)
-        .await
-        .ok_or("Provider not found".to_string())?;
-    provider.get_recent_albums(limit).await
+    let providers = state.queue.get_providers().await;
+    let mut all_albums = Vec::new();
+    for provider in providers.values() {
+        if let Ok(mut albums) = provider.get_recent_albums(limit).await {
+            all_albums.append(&mut albums);
+        }
+    }
+    Ok(all_albums)
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn get_favorites(
-    state: State<'_, AppState>,
-    provider_id: String,
-) -> Result<Vec<Track>, String> {
-    let provider = state
-        .queue
-        .get_provider(&provider_id)
-        .await
-        .ok_or("Provider not found".to_string())?;
-    provider.get_favorites().await
+pub async fn get_favorites(state: State<'_, AppState>) -> Result<Vec<Track>, String> {
+    let providers = state.queue.get_providers().await;
+    let mut all_tracks = Vec::new();
+    for provider in providers.values() {
+        if let Ok(mut tracks) = provider.get_favorites().await {
+            all_tracks.append(&mut tracks);
+        }
+    }
+    Ok(all_tracks)
 }
 
 #[tauri::command]
 #[specta::specta]
 pub async fn set_favorite(
     state: State<'_, AppState>,
-    provider_id: String,
     track_id: String,
     liked: bool,
 ) -> Result<(), String> {
-    let provider = state
-        .queue
-        .get_provider(&provider_id)
-        .await
-        .ok_or("Provider not found".to_string())?;
-    provider.set_track_liked(&track_id, liked).await
+    let providers = state.queue.get_providers().await;
+    for provider in providers.values() {
+        let _ = provider.set_track_liked(&track_id, liked).await;
+    }
+    Ok(())
 }
 
 #[tauri::command]
 #[specta::specta]
 pub async fn search(
     state: State<'_, AppState>,
-    provider_id: String,
     query: String,
 ) -> Result<UnifiedSearchResult, String> {
-    let provider = state
-        .queue
-        .get_provider(&provider_id)
-        .await
-        .ok_or("Provider not found".to_string())?;
-    provider.search(&query).await
+    let providers = state.queue.get_providers().await;
+    let mut result = UnifiedSearchResult::default();
+
+    for provider in providers.values() {
+        if let Ok(res) = provider.search(&query).await {
+            result.tracks.extend(res.tracks);
+            result.albums.extend(res.albums);
+            result.artists.extend(res.artists);
+        }
+    }
+    Ok(result)
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn get_artist(
-    state: State<'_, AppState>,
-    provider_id: String,
-    artist_id: String,
-) -> Result<Artist, String> {
-    let provider = state
-        .queue
-        .get_provider(&provider_id)
-        .await
-        .ok_or("Provider not found".to_string())?;
-    provider.get_artist(&artist_id).await
+pub async fn get_artist(state: State<'_, AppState>, artist_id: String) -> Result<Artist, String> {
+    let providers = state.queue.get_providers().await;
+    for provider in providers.values() {
+        if let Ok(artist) = provider.get_artist(&artist_id).await {
+            return Ok(artist);
+        }
+    }
+    Err("Artist not found".to_string())
 }
 
 #[tauri::command]
 #[specta::specta]
 pub async fn get_artist_albums(
     state: State<'_, AppState>,
-    provider_id: String,
     artist_id: String,
 ) -> Result<Vec<Album>, String> {
-    let provider = state
-        .queue
-        .get_provider(&provider_id)
-        .await
-        .ok_or("Provider not found".to_string())?;
-    provider.get_artist_albums(&artist_id).await
+    let providers = state.queue.get_providers().await;
+    let mut all_albums = Vec::new();
+    for provider in providers.values() {
+        if let Ok(mut albums) = provider.get_artist_albums(&artist_id).await {
+            all_albums.append(&mut albums);
+        }
+    }
+    Ok(all_albums)
 }
 
 #[tauri::command]
 #[specta::specta]
 pub async fn get_album_tracks(
     state: State<'_, AppState>,
-    provider_id: String,
     album_id: String,
 ) -> Result<Vec<Track>, String> {
-    let provider = state
-        .queue
-        .get_provider(&provider_id)
-        .await
-        .ok_or("Provider not found".to_string())?;
-    provider.get_album_tracks(&album_id).await
+    let providers = state.queue.get_providers().await;
+    let mut all_tracks = Vec::new();
+    for provider in providers.values() {
+        if let Ok(mut tracks) = provider.get_album_tracks(&album_id).await {
+            all_tracks.append(&mut tracks);
+        }
+    }
+    Ok(all_tracks)
 }

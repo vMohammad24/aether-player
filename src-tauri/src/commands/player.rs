@@ -7,14 +7,12 @@ use tauri::State;
 pub async fn play_track(
     state: State<'_, AppState>,
     track_id: String,
-    provider_id: String,
 ) -> Result<(), String> {
-    let provider = state
+    let track = state
         .queue
-        .get_provider(&provider_id)
+        .get_track(&track_id)
         .await
-        .ok_or("Provider not found".to_string())?;
-    let track = provider.get_track(&track_id).await?;
+        .ok_or("Track not found in any provider".to_string())?;
     state.queue.play_now(track).await
 }
 

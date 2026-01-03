@@ -19,7 +19,6 @@ use crate::traits::{AudioEngine, LibraryProvider};
 use std::collections::HashMap;
 use tauri::Manager;
 use tauri_plugin_store::StoreExt;
-
 fn create_audio_engine(config: &AppConfig) -> anyhow::Result<Box<dyn AudioEngine>> {
     match &config.audio_engine {
         AudioBackend::Mpv(mpv_opts) => Ok(Box::new(MpvPlayer::new(mpv_opts.clone())?)),
@@ -124,7 +123,6 @@ pub async fn run() {
             app.manage(AppState::new(queue.clone()));
 
             let handle = app.handle().clone();
-
             tauri::async_runtime::spawn(async move {
                 for source in config.sources {
                     if let SourceConfig::Local { id, path, .. } = source {
