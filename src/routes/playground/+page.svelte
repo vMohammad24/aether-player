@@ -1,29 +1,17 @@
 <script lang="ts">
   import Button from "$lib/components/Button.svelte";
   import Modal from "$lib/components/Modal.svelte";
-  import { tooltip } from "$lib/hooks";
+  import { contextMenu, tooltip } from "$lib/hooks";
+  import { baseColors } from "$lib/stores/theme.svelte";
   import { toast } from "$lib/stores/toast.svelte";
+  import { LogOut, Settings, User } from "@lucide/svelte";
   let showModal = $state(false);
-  const colors = [
-    { name: "background", cls: "bg-background" },
-    { name: "secondary", cls: "bg-secondary" },
-    { name: "primary", cls: "bg-primary" },
-    { name: "accent", cls: "bg-accent" },
-    { name: "border", cls: "bg-border" },
-    { name: "red", cls: "bg-red" },
-    { name: "green", cls: "bg-green" },
-    { name: "purple", cls: "bg-purple" },
-    { name: "pink", cls: "bg-pink" },
-    { name: "teal", cls: "bg-teal" },
-    { name: "mauve", cls: "bg-mauve" },
-    { name: "orange", cls: "bg-orange" },
-    { name: "yellow", cls: "bg-yellow" },
-    { name: "cyan", cls: "bg-cyan" },
-    { name: "blue", cls: "bg-blue" },
-    { name: "gold", cls: "bg-gold" },
-    { name: "text", cls: "bg-text" },
-    { name: "gray", cls: "bg-gray" },
-  ];
+  let placeholderCheck = $state(true);
+  let placeHolderTheme = $state("dark");
+  const colors = baseColors.map((color) => ({
+    name: color,
+    cls: `bg-${color}`,
+  }));
 </script>
 
 <div class="grid lg:grid-cols-[1fr_300px] gap-12">
@@ -126,15 +114,44 @@
         <div class="space-y-4">
           <h3 class="text-lg font-semibold text-text">Etc</h3>
           <Button onclick={() => (showModal = true)}>Open Modal</Button>
-          <!-- <span
-              use:contextMenu={[
-                { label: "Context Menu" },
-                { type: "separator" },
-                { label: "Another Item", type: "danger" },
-              ]}
-            >
-              <Button>Context Menu</Button>
-            </span> -->
+          <span
+            use:contextMenu={[
+              { type: "label", label: "View Options" },
+              {
+                type: "checkbox",
+                label: "Check BOX",
+                checked: placeholderCheck,
+                onChange: (v) => (placeholderCheck = v),
+                shortcut: "Ctrl+B",
+              },
+              { type: "separator" },
+              { type: "label", label: "Theme" },
+              {
+                type: "radio",
+                label: "Light",
+                checked: placeHolderTheme === "light",
+                onSelect: () => (placeHolderTheme = "light"),
+              },
+              {
+                type: "radio",
+                label: "Dark",
+                checked: placeHolderTheme === "dark",
+                onSelect: () => (placeHolderTheme = "dark"),
+              },
+              { type: "separator" },
+              {
+                label: "Account",
+                leftIcon: User,
+                children: [
+                  { label: "Profile", leftIcon: Settings },
+                  { type: "separator" },
+                  { label: "Log out", leftIcon: LogOut, variant: "danger" },
+                ],
+              },
+            ]}
+          >
+            <Button>Context Menu</Button>
+          </span>
         </div>
       </div>
     </section>

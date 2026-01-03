@@ -2,7 +2,7 @@
   import Button from "$lib/components/Button.svelte";
   import Modal from "$lib/components/Modal.svelte";
   import { confirm } from "$lib/stores/confirm.svelte";
-  import { theme, type Theme } from "$lib/stores/theme.svelte";
+  import { baseColors, theme, type Theme } from "$lib/stores/theme.svelte";
   import { toast } from "$lib/stores/toast.svelte";
   import { Download, Pencil, Plus, Trash2, Upload } from "@lucide/svelte";
 
@@ -46,26 +46,6 @@
       toast.success("Theme deleted");
     }
   }
-
-  const colorKeys = [
-    "background",
-    "primary",
-    "secondary",
-    "accent",
-    "text",
-    "subtext",
-    "border",
-    "blue",
-    "mauve",
-    "red",
-    "green",
-    "pink",
-    "yellow",
-    "orange",
-    "purple",
-    "teal",
-    "cyan",
-  ];
 </script>
 
 <div class="flex items-center justify-between border-b border-white/10 pb-3">
@@ -317,7 +297,7 @@
         </h3>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {#each colorKeys as key}
+          {#each baseColors as key}
             <div
               class="flex items-center gap-3 p-3 bg-secondary/50 rounded-lg border border-white/5"
             >

@@ -92,26 +92,12 @@ const DEFAULT_THEMES: Theme[] = [
             text: '#c6d0f5',
             subtext: '#808080',
             border: '#232634',
-            rosewater: '#f2d5cf',
-            flamingo: '#eebebe',
-            pink: '#f4b8e4',
-            mauve: '#ca9ee6',
-            red: '#e78284',
-            maroon: '#ea999c',
-            peach: '#ef9f76',
-            yellow: '#e5c890',
-            green: '#a6d189',
-            teal: '#81c8be',
-            sky: '#99d1db',
-            sapphire: '#85c1dc',
-            blue: '#8caaee',
-            lavender: '#babbf1'
         },
         options: { radius: '0.5rem' }
     }
 ];
 
-
+export const baseColors = DEFAULT_THEMES.flatMap((t) => Object.keys(t.colors)).filter((v, i, a) => a.indexOf(v) === i);
 class ThemeManager {
     #selectedId = $state<string>('default');
     #customThemes = $state<Theme[]>([]);
