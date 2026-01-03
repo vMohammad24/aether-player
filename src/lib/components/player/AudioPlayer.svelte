@@ -35,7 +35,7 @@
 
   function handleVolume(e: Event) {
     const target = e.target as HTMLInputElement;
-    player.setVolume(Number(target.value) / 100);
+    player.setVolume(Number(target.value));
   }
 
   function toggleRepeat() {

@@ -58,7 +58,7 @@ class PlayerStore {
 
     private _setVolume = createMutation('setVolume');
     async setVolume(vol: number) {
-
+        if (vol > 1) vol = vol / 100;
         updateCache('getPlayerState', [], s => s ? ({ ...s, volume: vol }) : s);
         return this._setVolume.trigger(vol);
     }
