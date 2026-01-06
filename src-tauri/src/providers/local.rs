@@ -1,8 +1,10 @@
 use crate::models::entities::{Album, Artist, Genre, Playlist, Track, UnifiedSearchResult};
 use crate::traits::{AudioStream, LibraryProvider};
+use crate::util::lastfm::LastFmClient;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use chrono::Utc;
+use futures::StreamExt;
 use jwalk::WalkDir;
 use lofty::prelude::*;
 use lofty::read_from_path;
@@ -19,14 +21,22 @@ use tokio::sync::mpsc;
 const BATCH_SIZE: usize = 200;
 const COVERS_DIR: &str = "covers";
 
+use crate::models::AppConfig;
+
 pub struct LocalProvider {
     db: SqlitePool,
     id: String,
     data_dir: PathBuf,
+    config: AppConfig,
 }
 
 impl LocalProvider {
-    pub async fn new(id: String, db_path: &Path, data_dir: &Path) -> Result<Self> {
+    pub async fn new(
+        id: String,
+        db_path: &Path,
+        data_dir: &Path,
+        config: AppConfig,
+    ) -> Result<Self> {
         if !data_dir.exists() {
             fs::create_dir_all(data_dir).context("Failed to create data directory")?;
         }
@@ -53,6 +63,7 @@ impl LocalProvider {
             db,
             id,
             data_dir: data_dir.to_path_buf(),
+            config,
         };
 
         provider.init_schema().await?;
@@ -1088,8 +1099,100 @@ impl LibraryProvider for LocalProvider {
             .execute(&self.db)
             .await;
         let _ = sqlx::query("PRAGMA optimize").execute(&self.db).await;
+
+        if let Some(lastfm_config) = &self.config.lastfm {
+            if lastfm_config.enabled {
+                log::info!("Last.fm enabled. Fetching artist metadata...");
+                let client = LastFmClient::new(
+                    lastfm_config.api_key.clone(),
+                    lastfm_config.api_secret.clone(),
+                    lastfm_config.username.clone(),
+                );
+
+                let artists: Vec<(String, String)> = sqlx::query_as(
+                    "SELECT id, name FROM artists WHERE bio IS NULL OR image_url IS NULL",
+                )
+                .fetch_all(&self.db)
+                .await
+                .map_err(|e| e.to_string())?;
+
+                let client = Arc::new(client);
+                let db_pool = self.db.clone();
+
+                futures::stream::iter(artists)
+                    .map(|(id, name)| {
+                        let client = client.clone();
+                        let db_pool = db_pool.clone();
+                        async move {
+                            if name == "Unknown Artist" {
+                                return;
+                            }
+
+                            let mut attempts = 0;
+                            loop {
+                                match client.get_artist_info(&name).await {
+                                    Ok(info) => {
+                                        let mut bio = None;
+                                        let mut image_url = None;
+
+                                        if let Some(b) = info.bio {
+                                            bio = Some(b.content);
+                                        }
+
+                                        if let Some(images) = info.image {
+                                            if let Some(img) = images
+                                                .iter()
+                                                .find(|i| i.size == "mega")
+                                                .or(images.last())
+                                            {
+                                                if !img.url.is_empty() {
+                                                    image_url = Some(img.url.clone());
+                                                }
+                                            }
+                                        }
+
+                                        if bio.is_some() || image_url.is_some() {
+                                            let _ = sqlx::query("UPDATE artists SET bio = COALESCE(?, bio), image_url = COALESCE(?, image_url) WHERE id = ?")
+                                                .bind(bio)
+                                                .bind(image_url)
+                                                .bind(&id)
+                                                .execute(&db_pool)
+                                                .await;
+                                        }
+                                        break;
+                                    }
+                                    Err(e) => {
+                                        let err_str = e.to_string();
+                                        if err_str.contains("429") {
+                                            log::warn!("Last.fm Rate Limit (429) for {}. Waiting...", name);
+                                            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+                                            continue;
+                                        }
+
+                                        attempts += 1;
+                                        if attempts >= 3 {
+                                            log::warn!(
+                                                "Failed to fetch Last.fm info for {} after 3 attempts: {}",
+                                                name,
+                                                e
+                                            );
+                                            break;
+                                        }
+                                        tokio::time::sleep(tokio::time::Duration::from_millis(500 * attempts as u64)).await;
+                                    }
+                                }
+                            }
+                        }
+                    })
+                    .buffer_unordered(20)
+                    .collect::<Vec<()>>()
+                    .await;
+            }
+        }
+
         Ok(())
     }
+
     async fn add_root(&self, path: &str) -> Result<(), String> {
         sqlx::query("INSERT OR IGNORE INTO library_roots (path) VALUES (?)")
             .bind(path)

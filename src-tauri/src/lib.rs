@@ -9,6 +9,7 @@ mod providers;
 mod queue;
 mod state;
 mod traits;
+pub mod util;
 
 use crate::models::{config::SourceConfig, AppConfig, AudioBackend};
 use crate::players::mpv::MpvPlayer;
@@ -96,7 +97,11 @@ pub async fn run() {
         .plugin(tauri_plugin_prevent_default::debug())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_store::Builder::new().build())
-        .plugin(tauri_plugin_log::Builder::default().build())
+        .plugin(
+            tauri_plugin_log::Builder::default()
+                .level(log::LevelFilter::Debug)
+                .build(),
+        )
         .plugin(tauri_plugin_sql::Builder::default().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -134,7 +139,7 @@ pub async fn run() {
 
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
-                for source in config.sources {
+                for source in &config.sources {
                     if let SourceConfig::Local {
                         id, path, enabled, ..
                     } = source
@@ -147,7 +152,8 @@ pub async fn run() {
                             let db_path = data_dir.join(format!("library_{}.db", id));
 
                             if let Ok(provider) =
-                                LocalProvider::new(id.clone(), &db_path, &data_dir).await
+                                LocalProvider::new(id.clone(), &db_path, &data_dir, config.clone())
+                                    .await
                             {
                                 let _ = provider.add_root(&path).await;
 

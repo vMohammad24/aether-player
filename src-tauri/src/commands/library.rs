@@ -24,7 +24,7 @@ pub async fn add_source(
     };
 
     config.sources.push(source.clone());
-    let val = serde_json::to_value(config).map_err(|e| e.to_string())?;
+    let val = serde_json::to_value(&config).map_err(|e| e.to_string())?;
     store.set("appConfig", val);
     store.save().map_err(|e| e.to_string())?;
 
@@ -35,7 +35,7 @@ pub async fn add_source(
                 .join(crate::APP_IDENTIFIER);
             let db_path = app_data_dir.join(format!("library_{}.db", id));
 
-            let provider = LocalProvider::new(id.clone(), &db_path, &app_data_dir)
+            let provider = LocalProvider::new(id.clone(), &db_path, &app_data_dir, config.clone())
                 .await
                 .map_err(|e| e.to_string())?;
 
@@ -90,7 +90,7 @@ pub async fn delete_source(
         SourceConfig::Tidal { id, .. } => id != &source_id,
     });
 
-    let val = serde_json::to_value(config).map_err(|e| e.to_string())?;
+    let val = serde_json::to_value(&config).map_err(|e| e.to_string())?;
     store.set("appConfig", val);
     store.save().map_err(|e| e.to_string())?;
 
@@ -140,7 +140,7 @@ pub async fn toggle_source(
                         .join(crate::APP_IDENTIFIER);
                     let db_path = app_data_dir.join(format!("library_{}.db", id));
 
-                    let provider = LocalProvider::new(id.clone(), &db_path, &app_data_dir)
+                    let provider = LocalProvider::new(id.clone(), &db_path, &app_data_dir, config.clone())
                         .await
                         .map_err(|e| e.to_string())?;
 
