@@ -3,7 +3,7 @@ import { untrack } from 'svelte';
 
 
 class ConfigManager {
-    #state = $state<AppConfig>({ theme: 'default', audioOutputDevice: null, sources: [] });
+    #state = $state<AppConfig>({ theme: 'default', audioOutputDevice: null, sources: [], lastfm: null });
     #isReady = $state(false);
     #isSaving = $state(false);
     #lastError = $state<string | null>(null);
