@@ -77,9 +77,54 @@ impl QueueManager {
         self.providers.write().await.remove(id);
     }
 
+    pub async fn remove_tracks_by_provider(&self, provider_id: &str) {
+        let mut state = self.state.lock().await;
+
+        let mut new_tracks = Vec::new();
+        let mut new_current_index = None;
+        let mut was_playing_removed = false;
+        let current_index = state.current_index;
+
+        for (i, track) in state.tracks.drain(..).enumerate() {
+            if track.provider_id.as_deref() != Some(provider_id) {
+                new_tracks.push(track);
+                if Some(i) == current_index {
+                    new_current_index = Some(new_tracks.len() - 1);
+                }
+            } else if Some(i) == current_index {
+                was_playing_removed = true;
+            }
+        }
+
+        state.tracks = new_tracks;
+        state.current_index = new_current_index;
+
+        if state.tracks.is_empty() {
+            state.current_index = None;
+            state.shuffled_indices.clear();
+        } else if state.shuffle {
+            recalc_shuffle(&mut state);
+        }
+
+        drop(state);
+
+        if was_playing_removed {
+            let _ = self.player.stop().await;
+        }
+    }
+
     pub async fn add_track(&self, track: Track) {
         let mut state = self.state.lock().await;
         state.tracks.push(track);
+        if state.shuffle {
+            let len = state.tracks.len();
+            state.shuffled_indices.push(len - 1);
+        }
+    }
+
+    pub async fn add_tracks(&self, tracks: Vec<Track>) {
+        let mut state = self.state.lock().await;
+        state.tracks.extend(tracks);
         if state.shuffle {
             let len = state.tracks.len();
             state.shuffled_indices.push(len - 1);

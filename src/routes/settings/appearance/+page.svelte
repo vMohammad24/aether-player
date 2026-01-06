@@ -48,7 +48,7 @@
   }
 </script>
 
-<div class="flex items-center justify-between border-b border-white/10 pb-3">
+<div class="flex items-center justify-between border-b border-border pb-3">
   <h2 class="text-xl font-semibold text-text">Appearance</h2>
   <div class="flex gap-2">
     <Button
@@ -73,9 +73,10 @@
         onchange={(e) => {
           const file = (e.target as HTMLInputElement).files?.[0];
           if (file)
-            theme.import(file).then((res) => {
-              if (res.success) toast.success("Theme imported");
-              else toast.error(res.error || "Failed to import");
+            toast.promise(theme.import(file!), {
+              loading: "Importing theme...",
+              success: "Theme imported",
+              error: "Failed to import theme",
             });
         }}
       />
@@ -89,7 +90,7 @@
       class="relative overflow-hidden rounded-xl border transition-all cursor-pointer group
              {t.id === theme.selectedId
         ? 'border-accent ring-1 ring-accent'
-        : 'border-white/10 hover:border-white/20'}"
+        : 'border-border hover:border-accent'}"
       onclick={() => handleThemeSelect(t.id)}
       role="button"
       tabindex="0"
@@ -229,7 +230,7 @@
             <Button
               variant="ghost"
               size="sm"
-              class="p-1.5 h-8 w-8 text-subtext hover:text-red-500 hover:bg-red/10"
+              class="p-1.5 h-8 w-8 text-subtext hover:text-red hover:bg-red/10"
               onclick={() => {
                 deleteTheme(t.id);
               }}
@@ -263,7 +264,7 @@
             <input
               type="text"
               bind:value={editingTheme.name}
-              class="bg-black/20 border border-white/10 rounded-md p-2 text-text focus:border-accent focus:outline-none"
+              class="bg-primary border border-border rounded-md p-2 text-text focus:border-accent focus:outline-none"
             />
           </label>
           <div class="flex flex-col gap-2">
@@ -282,7 +283,7 @@
               value={parseFloat(editingTheme.options.radius) || 0}
               oninput={(e) =>
                 (editingTheme!.options.radius = `${e.currentTarget.value}px`)}
-              class="w-full h-1.5 bg-black/40 rounded-lg appearance-none cursor-pointer accent-accent mt-2"
+              class="w-full h-1.5 bg-primary rounded-lg appearance-none cursor-pointer accent-accent mt-2"
             />
             <div class="flex justify-between text-[10px] text-subtext px-1">
               <span>0px</span>
@@ -292,14 +293,14 @@
           </div>
         </div>
 
-        <h3 class="text-lg font-medium text-text border-b border-white/10 pb-2">
+        <h3 class="text-lg font-medium text-text border-b border-border pb-2">
           Colors
         </h3>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {#each baseColors as key}
             <div
-              class="flex items-center gap-3 p-3 bg-secondary/50 rounded-lg border border-white/5"
+              class="flex items-center gap-3 p-3 bg-secondary rounded-lg border border-border"
             >
               <input
                 type="color"
@@ -320,7 +321,7 @@
           {/each}
         </div>
 
-        <div class="p-4 bg-secondary rounded-xl border border-white/10">
+        <div class="p-4 bg-secondary rounded-xl border border-border">
           <h4 class="text-sm font-medium text-text mb-3">Preview</h4>
           <div
             class="p-4 rounded-lg flex flex-col gap-2 transition-all"

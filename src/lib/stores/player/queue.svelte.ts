@@ -10,7 +10,7 @@ class QueueStore {
     get loading() { return this.#resource.loading; }
     get error() { return this.#resource.error; }
 
-
+    addMultiple = createMutation('addToQueueMultiple', { invalidate: 'getQueue' });
     add = createMutation('addToQueue', { invalidate: 'getQueue' });
     addNext = createMutation('addNext', { invalidate: 'getQueue' });
     remove = createMutation('removeFromQueue', { invalidate: 'getQueue' });

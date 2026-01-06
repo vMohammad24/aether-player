@@ -1,8 +1,11 @@
 use crate::models::config::SourceConfig;
-use crate::models::entities::{Album, Artist, Playlist, Track, UnifiedSearchResult};
+use crate::models::entities::{
+    Album, Artist, Genre, LibraryStats, Playlist, Track, UnifiedSearchResult,
+};
 use crate::providers::local::LocalProvider;
 use crate::state::AppState;
 use crate::traits::LibraryProvider;
+use rand::seq::SliceRandom;
 use tauri::{AppHandle, State};
 use tauri_plugin_store::StoreExt;
 
@@ -90,6 +93,70 @@ pub async fn delete_source(
     let val = serde_json::to_value(config).map_err(|e| e.to_string())?;
     store.set("appConfig", val);
     store.save().map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn toggle_source(
+    state: State<'_, AppState>,
+    app: AppHandle,
+    source_id: String,
+    enabled: bool,
+) -> Result<(), String> {
+    let store = app.store("config.json").map_err(|e| e.to_string())?;
+    let mut config: crate::models::AppConfig = if let Some(val) = store.get("appConfig") {
+        serde_json::from_value(val).map_err(|e| format!("Config error: {}", e))?
+    } else {
+        crate::models::AppConfig::default()
+    };
+
+    let mut found_source = None;
+    for source in &mut config.sources {
+        match source {
+            SourceConfig::Local { id, enabled: e, .. }
+            | SourceConfig::Subsonic { id, enabled: e, .. }
+            | SourceConfig::Tidal { id, enabled: e, .. } => {
+                if id == &source_id {
+                    *e = enabled;
+                    found_source = Some(source.clone());
+                    break;
+                }
+            }
+        }
+    }
+
+    if let Some(source) = found_source {
+        let val = serde_json::to_value(&config).map_err(|e| e.to_string())?;
+        store.set("appConfig", val);
+        store.save().map_err(|e| e.to_string())?;
+
+        if enabled {
+            match source {
+                SourceConfig::Local { id, path, .. } => {
+                    let app_data_dir = dirs::data_local_dir()
+                        .ok_or("failed to get local data dir")?
+                        .join(crate::APP_IDENTIFIER);
+                    let db_path = app_data_dir.join(format!("library_{}.db", id));
+
+                    let provider = LocalProvider::new(id.clone(), &db_path, &app_data_dir)
+                        .await
+                        .map_err(|e| e.to_string())?;
+
+                    provider.add_root(&path).await?;
+                    state
+                        .queue
+                        .add_provider(std::sync::Arc::new(provider))
+                        .await;
+                }
+                _ => {}
+            }
+        } else {
+            state.queue.remove_provider(&source_id).await;
+            state.queue.remove_tracks_by_provider(&source_id).await;
+        }
+    }
 
     Ok(())
 }
@@ -237,6 +304,99 @@ pub async fn get_recent_albums(
         }
     }
     Ok(all_albums)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn get_random_albums(
+    state: State<'_, AppState>,
+    limit: u32,
+) -> Result<Vec<Album>, String> {
+    let providers = state.queue.get_providers().await;
+    let mut all_albums = Vec::new();
+    for provider in providers.values() {
+        if let Ok(mut albums) = provider.get_random_albums(limit).await {
+            all_albums.append(&mut albums);
+        }
+    }
+    let mut rng = rand::rng();
+    all_albums.shuffle(&mut rng);
+    Ok(all_albums)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn get_most_played_tracks(
+    state: State<'_, AppState>,
+    limit: u32,
+) -> Result<Vec<Track>, String> {
+    let providers = state.queue.get_providers().await;
+    let mut all_tracks = Vec::new();
+    for provider in providers.values() {
+        if let Ok(mut tracks) = provider.get_most_played_tracks(limit).await {
+            all_tracks.append(&mut tracks);
+        }
+    }
+    all_tracks.sort_by(|a, b| b.play_count.cmp(&a.play_count));
+    all_tracks.truncate(limit as usize);
+    Ok(all_tracks)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn get_genres(state: State<'_, AppState>) -> Result<Vec<Genre>, String> {
+    let providers = state.queue.get_providers().await;
+    let mut all_genres = std::collections::HashMap::new();
+
+    for provider in providers.values() {
+        if let Ok(genres) = provider.get_genres().await {
+            for genre in genres {
+                let entry = all_genres.entry(genre.name.clone()).or_insert(Genre {
+                    name: genre.name,
+                    track_count: 0,
+                });
+                entry.track_count += genre.track_count;
+            }
+        }
+    }
+
+    let mut result: Vec<Genre> = all_genres.into_values().collect();
+    result.sort_by(|a, b| b.track_count.cmp(&a.track_count));
+    Ok(result)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn get_library_stats(state: State<'_, AppState>) -> Result<LibraryStats, String> {
+    let providers = state.queue.get_providers().await;
+    let mut total_stats = LibraryStats::default();
+
+    for provider in providers.values() {
+        if let Ok(stats) = provider.get_library_stats().await {
+            total_stats.album_count += stats.album_count;
+            total_stats.track_count += stats.track_count;
+            total_stats.artist_count += stats.artist_count;
+            total_stats.total_duration += stats.total_duration;
+        }
+    }
+    Ok(total_stats)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn get_genre_tracks(
+    state: State<'_, AppState>,
+    genre_name: String,
+) -> Result<Vec<Track>, String> {
+    let providers = state.queue.get_providers().await;
+    let mut all_tracks = Vec::new();
+    for provider in providers.values() {
+        if let Ok(mut tracks) = provider.get_genre_tracks(&genre_name).await {
+            all_tracks.append(&mut tracks);
+        }
+    }
+    all_tracks.sort_by(|a, b| b.play_count.cmp(&a.play_count));
+    Ok(all_tracks)
 }
 
 #[tauri::command]

@@ -37,7 +37,7 @@
     >
       <button
         type="button"
-        class="fixed inset-0 bg-background/80 backdrop-blur-sm cursor-default transition-opacity"
+        class="fixed inset-0 bg-black/50 cursor-default transition-opacity"
         onclick={close}
         aria-label="Close modal"
         transition:fade={{ duration: 200, easing: quintOut }}

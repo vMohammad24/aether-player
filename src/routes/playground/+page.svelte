@@ -15,6 +15,9 @@
     name: color,
     cls: `bg-${color}`,
   }));
+
+  const recentAlbums = media.recentAlbums(5);
+  const favorites = media.favorites;
 </script>
 
 <div class="grid lg:grid-cols-[1fr_300px] gap-12">
@@ -27,7 +30,7 @@
         {#each colors as color}
           <div class="group flex flex-col gap-2">
             <div
-              class="relative w-full aspect-video rounded-md {color.cls} border border-white/5 shadow-lg group-hover:scale-[1.02] transition-transform duration-200"
+              class="relative w-full aspect-video rounded-md {color.cls} border border-border group-hover:scale-[1.02] transition-transform duration-200"
             ></div>
             <span class="text-sm font-medium text-text">{color.name}</span>
           </div>
@@ -204,7 +207,7 @@
               <div
                 class="bg-secondary p-4 rounded-md font-mono text-xs overflow-auto max-h-40"
               >
-                <pre>{JSON.stringify(media.recentAlbums(5).data, null, 2)}</pre>
+                <pre>{JSON.stringify(recentAlbums.data, null, 2)}</pre>
               </div>
             </div>
             <div>
@@ -212,7 +215,7 @@
               <div
                 class="bg-secondary p-4 rounded-md font-mono text-xs overflow-auto max-h-40"
               >
-                <pre>{JSON.stringify(media.favorites.data, null, 2)}</pre>
+                <pre>{JSON.stringify(favorites.data, null, 2)}</pre>
               </div>
             </div>
           </div>

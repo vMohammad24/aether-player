@@ -1,4 +1,4 @@
-use crate::models::entities::{Album, Artist, Playlist, Track, UnifiedSearchResult};
+use crate::models::entities::{Album, Artist, Genre, Playlist, Track, UnifiedSearchResult};
 use crate::traits::{AudioStream, LibraryProvider};
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
@@ -769,6 +769,117 @@ impl LibraryProvider for LocalProvider {
         .await
         .map_err(|e| e.to_string())?;
         Ok(rows.into_iter().map(map_row_to_album).collect())
+    }
+
+    async fn get_random_albums(&self, limit: u32) -> Result<Vec<Album>, String> {
+        let rows = sqlx::query(
+            r#"SELECT id, title, artist_id, year, cover_art, 
+                (SELECT name FROM artists WHERE id = albums.artist_id) as artist_name,
+                (SELECT COUNT(*) FROM tracks WHERE album_id = albums.id) as track_count
+            FROM albums 
+            ORDER BY RANDOM() LIMIT ?"#,
+        )
+        .bind(limit)
+        .fetch_all(&self.db)
+        .await
+        .map_err(|e| e.to_string())?;
+        Ok(rows.into_iter().map(map_row_to_album).collect())
+    }
+
+    async fn get_most_played_tracks(&self, limit: u32) -> Result<Vec<Track>, String> {
+        let rows = sqlx::query(
+            r#"SELECT t.*, a.name as artist_name, al.title as album_title
+            FROM tracks t
+            LEFT JOIN artists a ON t.artist_id = a.id
+            LEFT JOIN albums al ON t.album_id = al.id
+            WHERE t.play_count > 0
+            ORDER BY t.play_count DESC LIMIT ?"#,
+        )
+        .bind(limit)
+        .fetch_all(&self.db)
+        .await
+        .map_err(|e| e.to_string())?;
+        Ok(rows
+            .into_iter()
+            .map(|r| map_row_to_track(r, Some(self.id.clone())))
+            .collect())
+    }
+
+    async fn get_library_stats(&self) -> Result<crate::models::entities::LibraryStats, String> {
+        let album_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM albums")
+            .fetch_one(&self.db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let track_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM tracks")
+            .fetch_one(&self.db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let artist_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM artists")
+            .fetch_one(&self.db)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let total_duration: i64 =
+            sqlx::query_scalar("SELECT COALESCE(SUM(duration_sec), 0) FROM tracks")
+                .fetch_one(&self.db)
+                .await
+                .map_err(|e| e.to_string())?;
+
+        let average_bitrate: i64 = sqlx::query_scalar(
+            "SELECT CAST(COALESCE(AVG(bitrate), 0) AS INTEGER) FROM tracks WHERE bitrate IS NOT NULL",
+        )
+        .fetch_one(&self.db)
+        .await
+        .map_err(|e| e.to_string())?;
+        Ok(crate::models::entities::LibraryStats {
+            album_count: album_count as u32,
+            track_count: track_count as u32,
+            artist_count: artist_count as u32,
+            total_duration: total_duration.try_into().unwrap_or(u32::MAX),
+            average_bitrate: average_bitrate.try_into().unwrap_or(u32::MAX),
+        })
+    }
+
+    async fn get_genres(&self) -> Result<Vec<Genre>, String> {
+        let rows = sqlx::query(
+            r#"SELECT genre as name, COUNT(*) as track_count 
+            FROM tracks 
+            WHERE genre IS NOT NULL AND genre != '' 
+            GROUP BY genre 
+            ORDER BY track_count DESC"#,
+        )
+        .fetch_all(&self.db)
+        .await
+        .map_err(|e| e.to_string())?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| Genre {
+                name: row.get("name"),
+                track_count: row.get::<i64, _>("track_count") as u32,
+            })
+            .collect())
+    }
+
+    async fn get_genre_tracks(&self, genre: &str) -> Result<Vec<Track>, String> {
+        let rows = sqlx::query(
+            r#"SELECT t.*, a.name as artist_name, al.title as album_title
+            FROM tracks t
+            LEFT JOIN artists a ON t.artist_id = a.id
+            LEFT JOIN albums al ON t.album_id = al.id
+            WHERE t.genre = ?
+            ORDER BY t.play_count DESC"#,
+        )
+        .bind(genre)
+        .fetch_all(&self.db)
+        .await
+        .map_err(|e| e.to_string())?;
+        Ok(rows
+            .into_iter()
+            .map(|r| map_row_to_track(r, Some(self.id.clone())))
+            .collect())
     }
 
     async fn get_favorites(&self) -> Result<Vec<Track>, String> {

@@ -10,10 +10,7 @@ pub async fn get_queue(state: State<'_, AppState>) -> Result<Queue, String> {
 
 #[tauri::command]
 #[specta::specta]
-pub async fn add_to_queue(
-    state: State<'_, AppState>,
-    track_id: String,
-) -> Result<(), String> {
+pub async fn add_to_queue(state: State<'_, AppState>, track_id: String) -> Result<(), String> {
     let track = state
         .queue
         .get_track(&track_id)
@@ -25,10 +22,26 @@ pub async fn add_to_queue(
 
 #[tauri::command]
 #[specta::specta]
-pub async fn add_next(
+pub async fn add_to_queue_multiple(
     state: State<'_, AppState>,
-    track_id: String,
+    track_ids: Vec<String>,
 ) -> Result<(), String> {
+    let mut tracks = Vec::new();
+    for track_id in track_ids {
+        let track = state
+            .queue
+            .get_track(&track_id)
+            .await
+            .ok_or("One or more tracks not found in any provider".to_string())?;
+        tracks.push(track);
+    }
+    state.queue.add_tracks(tracks).await;
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn add_next(state: State<'_, AppState>, track_id: String) -> Result<(), String> {
     let track = state
         .queue
         .get_track(&track_id)

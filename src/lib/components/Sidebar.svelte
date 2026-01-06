@@ -10,7 +10,6 @@
     Headphones,
     House,
     Menu,
-    Mic,
     Palette,
     Settings,
     X,
@@ -41,13 +40,6 @@
         label: "Explore",
         href: "/explore",
         icon: FileText,
-        type: "single",
-      },
-      {
-        id: "feed",
-        label: "Feed",
-        href: "/feed",
-        icon: Mic,
         type: "single",
       },
       {
@@ -151,7 +143,7 @@
 {#if isMobile && !isOpen}
   <header
     class="fixed top-0 left-0 right-0 z-30 flex items-center justify-between p-4
-            bg-background/80 backdrop-blur-xl border-b border-white/5"
+            bg-background border-b border-white/5"
     transition:fade={{ duration: 200 }}
   >
     <Button
@@ -170,7 +162,7 @@
 {#if isMobile && isOpen}
   <button
     type="button"
-    class="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm transition-opacity"
+    class="fixed inset-0 bg-black/50 z-40 transition-opacity"
     onclick={() => (isOpen = false)}
     transition:fade={{ duration: 200 }}
     aria-label="Close sidebar"
@@ -183,7 +175,7 @@
         {isOpen ? 'w-64' : 'w-20'} 
         {isMobile && !isOpen ? '-translate-x-full' : 'translate-x-0'}
         transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)]
-        bg-background/95 backdrop-blur-2xl border-r border-white/5"
+        bg-background border-r border-white/5"
 >
   <div class="flex flex-col h-full relative z-10">
     <div

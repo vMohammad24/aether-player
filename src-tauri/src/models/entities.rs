@@ -64,6 +64,23 @@ pub struct Playlist {
     pub created_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Type, FromRow)]
+#[serde(rename_all = "camelCase")]
+pub struct Genre {
+    pub name: String,
+    pub track_count: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, specta::Type, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryStats {
+    pub album_count: u32,
+    pub track_count: u32,
+    pub artist_count: u32,
+    pub total_duration: u32,
+    pub average_bitrate: u32,
+}
+
 #[derive(Debug, Clone, serde::Serialize, specta::Type, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct UnifiedSearchResult {

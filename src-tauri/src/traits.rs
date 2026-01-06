@@ -1,5 +1,5 @@
 use crate::models::{
-    entities::{PlayerEvent, Playlist, UnifiedSearchResult},
+    entities::{Genre, LibraryStats, PlayerEvent, Playlist, UnifiedSearchResult},
     Album, Artist, PlayerState, Track,
 };
 use async_trait::async_trait;
@@ -18,6 +18,13 @@ pub trait LibraryProvider: Send + Sync {
     fn name(&self) -> &str;
 
     async fn get_recent_albums(&self, limit: u32) -> Result<Vec<Album>, String>;
+    async fn get_random_albums(&self, limit: u32) -> Result<Vec<Album>, String>;
+    async fn get_most_played_tracks(&self, limit: u32) -> Result<Vec<Track>, String>;
+    async fn get_library_stats(&self) -> Result<LibraryStats, String>;
+    async fn get_genres(&self) -> Result<Vec<Genre>, String>;
+    async fn get_genre_tracks(&self, _genre: &str) -> Result<Vec<Track>, String> {
+        Ok(vec![])
+    }
     async fn get_favorites(&self) -> Result<Vec<Track>, String>;
 
     async fn search(&self, query: &str) -> Result<UnifiedSearchResult, String>;

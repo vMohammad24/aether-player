@@ -1,70 +1,108 @@
-import { events, type PlayerEvent } from '$lib/bindings';
-import { createGlobalResource, createMutation, invalidate, updateCache } from '$lib/stores/resource.svelte';
+import { commands, events, type PlayerEvent, type PlayerState, type Track } from '$lib/bindings';
+import { createMutation, invalidate } from '$lib/stores/resource.svelte';
+import { queue } from './queue.svelte';
 
 class PlayerStore {
-    #resource = createGlobalResource('getPlayerState');
-
+    state = $state<PlayerState | null>(null);
+    loading = $state(true);
+    oldVolume = 0;
+    muted = $state(false);
     constructor() {
-
+        this.init();
         events.playerEvent.listen((event) => {
             this.handleEvent(event.payload);
         });
     }
 
-    get state() { return this.#resource.data; }
-    get loading() { return this.#resource.loading; }
-
-    handleEvent(event: PlayerEvent) {
-
-        updateCache('getPlayerState', [], (current) => {
-            if (!current) return current;
-
-
-            const next = { ...current };
-
-            if (event.type === 'TimeUpdate') {
-                next.position = event.data;
-            } else if (event.type === 'DurationChange') {
-                next.duration = event.data;
-            } else if (event.type === 'Paused') {
-                next.paused = true;
-            } else if (event.type === 'Playing') {
-                next.paused = false;
-                invalidate('getQueue');
-            } else if (event.type === 'Ended') {
-                next.paused = true;
-                invalidate('getQueue');
+    async init() {
+        try {
+            const res = await commands.getPlayerState();
+            if (res.status === 'ok') {
+                this.state = res.data;
             }
-
-            return next;
-        });
+        } catch (e) {
+            console.error('Failed to initialize player state', e);
+        } finally {
+            this.loading = false;
+        }
     }
 
+    handleEvent(event: PlayerEvent) {
+        if (!this.state) return;
+        if (event.type === 'TimeUpdate') {
+            this.state.position = event.data;
+        } else if (event.type === 'DurationChange') {
+            this.state.duration = event.data;
+        } else if (event.type === 'Paused') {
+            this.state.paused = true;
+        } else if (event.type === 'Playing') {
+            this.state.paused = false;
+            invalidate('getQueue');
+        } else if (event.type === 'Ended') {
+            this.state.paused = true;
+            invalidate('getQueue');
+        }
+    }
 
-    play = createMutation('play', { invalidate: 'getPlayerState' });
-    pause = createMutation('pause', { invalidate: 'getPlayerState' });
-    stop = createMutation('stop', { invalidate: 'getPlayerState' });
-    next = createMutation('next', { invalidate: ['getPlayerState', 'getQueue'] });
-    prev = createMutation('prev', { invalidate: ['getPlayerState', 'getQueue'] });
+    play = createMutation('play', {
+        invalidate: 'getQueue',
+        onSuccess: () => { if (this.state) this.state.paused = false; }
+    });
 
-    playTrack = createMutation('playTrack', { invalidate: ['getPlayerState', 'getQueue'] });
+    pause = createMutation('pause', {
+        onSuccess: () => { if (this.state) this.state.paused = true; }
+    });
+
+    stop = createMutation('stop', {
+        onSuccess: () => {
+            if (this.state) {
+                this.state.paused = true;
+                this.state.position = 0;
+            }
+        }
+    });
+
+    next = createMutation('next', { invalidate: 'getQueue' });
+    prev = createMutation('prev', { invalidate: 'getQueue' });
+
+    playTrack = createMutation('playTrack', { invalidate: 'getQueue' });
 
     private _seek = createMutation('seek');
     async seek(seconds: number) {
-
-        updateCache('getPlayerState', [], s => s ? ({ ...s, position: seconds }) : s);
+        if (this.state) this.state.position = seconds;
         return this._seek.trigger(seconds);
     }
 
     private _setVolume = createMutation('setVolume');
     async setVolume(vol: number) {
         if (vol > 1) vol = vol / 100;
-        updateCache('getPlayerState', [], s => s ? ({ ...s, volume: vol }) : s);
+        if (this.state) this.state.volume = vol;
+        if (vol > 0) this.muted = false;
         return this._setVolume.trigger(vol);
     }
 
-    toggleShuffle = createMutation('toggleShuffle', { invalidate: ['getPlayerState', 'getQueue'] });
-    setRepeat = createMutation('setRepeat', { invalidate: ['getPlayerState', 'getQueue'] });
+    async mute() {
+        this.oldVolume = this.state ? this.state.volume : 1;
+        this.muted = true;
+        return this.setVolume(0);
+    }
+
+    async unmute() {
+        this.muted = false;
+        return this.setVolume(this.oldVolume);
+    }
+
+    async playTracks(trackIds: string[] | Track[], index: number = 0) {
+        const ids = trackIds.map(t => typeof t === 'string' ? t : t.id);
+        player.stop.trigger();
+        player.seek(0);
+        await queue.clear.trigger();
+        await queue.addMultiple.trigger(ids);
+        return queue.play.trigger(index);
+    }
+
+    toggleShuffle = createMutation('toggleShuffle', { invalidate: 'getQueue' });
+    setRepeat = createMutation('setRepeat', { invalidate: 'getQueue' });
 }
 
 export const player = new PlayerStore();

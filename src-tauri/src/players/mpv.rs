@@ -104,7 +104,7 @@ impl MpvPlayer {
                                 }
                                 _ => {}
                             },
-                            Event::EndFile(_) => {
+                            Event::EndFile(0) => {
                                 let _ = event_tx_actor.send(PlayerEvent::Ended);
                             }
                             Event::Shutdown => break 'actor,
@@ -118,6 +118,10 @@ impl MpvPlayer {
                                 let mode = if auto_play { "replace" } else { "append-play" };
                                 if let Err(e) = mpv.command("loadfile", &[&url, mode]) {
                                     log::error!("MPV Load Error: {}", e);
+                                } else if auto_play {
+                                    let _ = mpv.set_property("pause", false);
+                                    cached_state.paused = false;
+                                    let _ = event_tx_actor.send(PlayerEvent::Playing);
                                 }
                             }
                             EngineCommand::Play => {

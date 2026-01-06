@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { type SourceConfig } from "$lib/bindings";
+  import { commands, type SourceConfig } from "$lib/bindings";
   import Button from "$lib/components/Button.svelte";
   import Modal from "$lib/components/Modal.svelte";
   import { config } from "$lib/stores/config.svelte";
@@ -14,6 +14,18 @@
   let localPath = $state("");
   let localName = $state("My Music");
 
+  const KEYS_TO_INVALIDATE: (keyof typeof commands)[] = [
+    "getRecentAlbums",
+    "getFavorites",
+    "getPlaylists",
+    "getArtist",
+    "getAlbum",
+    "getArtistAlbums",
+    "getAlbumTracks",
+    "search",
+    "getLibraryStats",
+  ];
+
   const addSource = createMutation("addSource", {
     onError: (e) => toast.error(`Failed to add source: ${e}`),
     onSuccess: () => {
@@ -22,6 +34,7 @@
       resetSourceForm();
       toast.success("Source added");
     },
+    invalidate: KEYS_TO_INVALIDATE,
   });
 
   const deleteSource = createMutation("deleteSource", {
@@ -30,6 +43,15 @@
       config.forceSync();
       toast.success("Source removed");
     },
+    invalidate: KEYS_TO_INVALIDATE,
+  });
+
+  const toggleSource = createMutation("toggleSource", {
+    onError: (e) => toast.error(`Failed to toggle source: ${e}`),
+    onSuccess: () => {
+      config.forceSync();
+    },
+    invalidate: KEYS_TO_INVALIDATE,
   });
 
   const rescanSource = createMutation("scanLibrary");
@@ -66,13 +88,17 @@
     }
   }
 
+  async function handleToggleSource(id: string, enabled: boolean) {
+    await toggleSource.trigger(id, enabled);
+  }
+
   function resetSourceForm() {
     localPath = "";
     localName = "My Music";
   }
 </script>
 
-<div class="flex items-center justify-between border-b border-white/10 pb-3">
+<div class="flex items-center justify-between border-b border-border pb-3">
   <h2 class="text-xl font-semibold text-text">Library Sources</h2>
   <Button onclick={() => (showAddSourceModal = true)} size="sm"
     >Add Source</Button
@@ -82,7 +108,8 @@
 <div class="grid gap-3">
   {#each config.sources as source (source.id)}
     <div
-      class="flex items-center justify-between p-4 bg-secondary rounded-xl border border-white/5 group hover:border-white/10 transition-colors"
+      class="flex items-center justify-between p-4 bg-secondary rounded-xl border border-border group hover:border-accent transition-colors"
+      class:opacity-50={!source.enabled}
     >
       <div class="flex items-center gap-4">
         <div
@@ -108,7 +135,27 @@
         </div>
       </div>
 
-      <div>
+      <div class="flex items-center gap-2">
+        <label class="flex items-center gap-2 mr-2 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={source.enabled}
+            onchange={(e) =>
+              handleToggleSource(source.id, e.currentTarget.checked)}
+            class="hidden"
+          />
+          <div
+            class="w-10 h-5 rounded-full transition-colors relative {source.enabled
+              ? 'bg-accent'
+              : 'bg-primary'}"
+          >
+            <div
+              class="absolute top-1 left-1 w-3 h-3 bg-text rounded-full transition-transform {source.enabled
+                ? 'translate-x-5'
+                : 'translate-x-0'}"
+            ></div>
+          </div>
+        </label>
         <Button
           variant="ghost"
           size="sm"
@@ -132,7 +179,7 @@
     </div>
   {:else}
     <div
-      class="text-center py-12 text-subtext border-2 border-dashed border-white/5 rounded-xl"
+      class="text-center py-12 text-subtext border-2 border-dashed border-border rounded-xl"
     >
       <p>No sources added yet.</p>
       <Button
@@ -148,7 +195,7 @@
 <Modal bind:show={showAddSourceModal} maxWidth="max-w-md">
   <div class="p-6 space-y-6">
     <h2 class="text-xl font-bold text-text">Add Library Source</h2>
-    <div class="flex p-1 bg-black/20 rounded-lg">
+    <div class="flex p-1 bg-primary rounded-lg">
       <button
         class="flex-1 py-1.5 text-sm font-medium rounded-md transition-colors {newSourceType ===
         'local'
@@ -172,7 +219,7 @@
           <input
             type="text"
             bind:value={localName}
-            class="bg-black/20 border border-white/10 rounded-md p-2 text-text focus:border-accent focus:outline-none"
+            class="bg-primary border border-border rounded-md p-2 text-text focus:border-accent focus:outline-none"
             placeholder="My Music"
           />
         </label>
@@ -182,7 +229,7 @@
             <input
               type="text"
               bind:value={localPath}
-              class="bg-black/20 border border-white/10 rounded-md p-2 text-text focus:border-accent focus:outline-none"
+              class="bg-primary border border-border rounded-md p-2 text-text focus:border-accent focus:outline-none"
               placeholder="C:\Music"
             />
             {#if !localPath}

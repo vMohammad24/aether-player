@@ -146,43 +146,45 @@ export function updateCache<K extends CommandKey>(
 
 export function createResource<K extends CommandKey>(
     commandKey: K,
-    ...args: Parameters<Commands[K]>
+    ...args: (Parameters<Commands[K]>[number] | (() => Parameters<Commands[K]>[number]))[]
 ) {
-
     type RawReturn = Awaited<ReturnType<Commands[K]>>;
-
     type DataT = UnwrapType<RawReturn>;
 
-    const cacheKey = `${String(commandKey)}:${serializeArgs(args)}`;
+    const currentArgs = $derived(args.map(arg => typeof arg === 'function' ? arg() : arg));
+    const cacheKey = $derived(`${String(commandKey)}:${serializeArgs(currentArgs)}`);
 
-    if (!globalCache.has(cacheKey)) {
-        const fetcher = commands[commandKey];
-        globalCache.set(cacheKey, new ResourceState<DataT>(fetcher, args, cacheKey));
-    }
-
-    const state = globalCache.get(cacheKey) as ResourceState<DataT>;
+    const state = $derived.by(() => {
+        const key = cacheKey;
+        if (!globalCache.has(key)) {
+            const fetcher = commands[commandKey];
+            globalCache.set(key, new ResourceState<DataT>(fetcher, currentArgs, key));
+        }
+        return globalCache.get(key) as ResourceState<DataT>;
+    });
 
     $effect(() => {
-        state.refCount++;
+        const s = state;
+        s.refCount++;
 
         if (garbageCollectors.has(cacheKey)) {
             clearTimeout(garbageCollectors.get(cacheKey)!);
             garbageCollectors.delete(cacheKey);
         }
 
-        if (!state.isHydrating) {
+        if (!s.isHydrating) {
             untrack(() => {
-                if (state.data !== null && (Date.now() - state.lastUpdated > 10000)) {
-                    state.fetch();
+                if (s.data !== null && (Date.now() - s.lastUpdated > 10000)) {
+                    s.fetch();
                 }
             });
         }
 
         return () => {
-            state.refCount--;
-            if (state.refCount <= 0) {
+            s.refCount--;
+            if (s.refCount <= 0) {
                 const timeout = setTimeout(() => {
-                    if (state.refCount <= 0) {
+                    if (s.refCount <= 0) {
                         globalCache.delete(cacheKey);
                     }
                     garbageCollectors.delete(cacheKey);

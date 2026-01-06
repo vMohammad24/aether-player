@@ -99,10 +99,9 @@ const DEFAULT_THEMES: Theme[] = [
 
 export const baseColors = DEFAULT_THEMES.flatMap((t) => Object.keys(t.colors)).filter((v, i, a) => a.indexOf(v) === i);
 class ThemeManager {
-    #selectedId = $state<string>('default');
     #customThemes = $state<Theme[]>([]);
     readonly all = $derived([...DEFAULT_THEMES, ...this.#customThemes]);
-    readonly current = $derived(this.all.find((t) => t.id === this.#selectedId) ?? DEFAULT_THEMES[0]);
+    readonly current = $derived(this.all.find((t) => t.id === config.theme) ?? DEFAULT_THEMES[0]);
 
     constructor() {
         if (browser) {
@@ -121,7 +120,6 @@ class ThemeManager {
         $effect(() => {
             if (!browser) return;
 
-            config.theme = this.#selectedId;
             localStorage.setItem(STORAGE_KEY_CUSTOM, JSON.stringify(this.#customThemes));
 
             const root = document.documentElement;
@@ -143,7 +141,7 @@ class ThemeManager {
     }
 
     set(id: string) {
-        this.#selectedId = id;
+        config.theme = id;
     }
 
     add(newTheme: Theme): Result {
@@ -165,8 +163,8 @@ class ThemeManager {
 
     remove(id: string) {
         this.#customThemes = this.#customThemes.filter((t) => t.id !== id);
-        if (this.#selectedId === id) {
-            this.#selectedId = 'default';
+        if (config.theme === id) {
+            config.theme = 'default';
         }
     }
 
@@ -226,7 +224,7 @@ class ThemeManager {
         return true;
     }
 
-    get selectedId() { return this.#selectedId; }
+    get selectedId() { return config.theme; }
 }
 
 export const theme = new ThemeManager();

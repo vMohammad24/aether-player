@@ -43,6 +43,7 @@ pub async fn run() {
             commands::player::get_player_state,
             commands::queue::get_queue,
             commands::queue::add_to_queue,
+            commands::queue::add_to_queue_multiple,
             commands::queue::add_next,
             commands::queue::remove_from_queue,
             commands::queue::clear_queue,
@@ -57,6 +58,11 @@ pub async fn run() {
             commands::library::remove_from_playlist,
             commands::library::get_playlist_tracks,
             commands::library::get_recent_albums,
+            commands::library::get_random_albums,
+            commands::library::get_most_played_tracks,
+            commands::library::get_genres,
+            commands::library::get_genre_tracks,
+            commands::library::get_library_stats,
             commands::library::get_favorites,
             commands::library::search,
             commands::library::get_artist,
@@ -66,6 +72,7 @@ pub async fn run() {
             commands::library::set_favorite,
             commands::library::add_source,
             commands::library::delete_source,
+            commands::library::toggle_source,
             commands::config::get_default_config,
             commands::config::get_app_config,
             commands::config::save_app_config
@@ -86,6 +93,7 @@ pub async fn run() {
     let providers: HashMap<String, Arc<dyn LibraryProvider>> = HashMap::new();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_prevent_default::debug())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_log::Builder::default().build())
@@ -127,7 +135,13 @@ pub async fn run() {
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 for source in config.sources {
-                    if let SourceConfig::Local { id, path, .. } = source {
+                    if let SourceConfig::Local {
+                        id, path, enabled, ..
+                    } = source
+                    {
+                        if !enabled {
+                            continue;
+                        }
                         if let Some(app_data_dir) = dirs::data_local_dir() {
                             let data_dir = app_data_dir.join(crate::APP_IDENTIFIER);
                             let db_path = data_dir.join(format!("library_{}.db", id));
