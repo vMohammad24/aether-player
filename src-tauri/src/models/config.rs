@@ -10,6 +10,7 @@ pub struct AppConfig {
     pub sources: Vec<SourceConfig>,
     #[serde(default)]
     pub audio_engine: AudioBackend,
+    pub lastfm: Option<LastFmConfig>,
 }
 
 impl Default for AppConfig {
@@ -19,8 +20,18 @@ impl Default for AppConfig {
             audio_output_device: None,
             sources: Vec::new(),
             audio_engine: AudioBackend::default(),
+            lastfm: None,
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct LastFmConfig {
+    pub api_key: String,
+    pub api_secret: String,
+    pub session_key: Option<String>,
+    pub enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
