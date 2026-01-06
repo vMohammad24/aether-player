@@ -9,6 +9,7 @@ const API_ROOT: &str = "http://ws.audioscrobbler.com/2.0/";
 pub struct LastFmClient {
     api_key: String,
     api_secret: String,
+    username: String,
     session_key: Option<String>,
     client: Client,
 }
@@ -73,10 +74,11 @@ struct ArtistInfoResponse {
 }
 
 impl LastFmClient {
-    pub fn new(api_key: String, api_secret: String) -> Self {
+    pub fn new(api_key: String, api_secret: String, username: String) -> Self {
         Self {
             api_key,
             api_secret,
+            username,
             session_key: None,
             client: Client::new(),
         }
@@ -111,6 +113,7 @@ impl LastFmClient {
             ("api_key", &self.api_key),
             ("format", "json"),
             ("autocorrect", "1"),
+            ("username", &self.username),
         ];
 
         let res = self
@@ -127,7 +130,10 @@ impl LastFmClient {
             return Err(anyhow::anyhow!("Last.fm API Error {}: {}", status, text));
         }
 
-        let data: ArtistInfoResponse = res.json().await.context("Failed to parse Last.fm response")?;
+        let data: ArtistInfoResponse = res
+            .json()
+            .await
+            .context("Failed to parse Last.fm response")?;
         Ok(data.artist)
     }
 
@@ -169,7 +175,11 @@ impl LastFmClient {
         if !res.status().is_success() {
             let status = res.status();
             let text = res.text().await.unwrap_or_default();
-            return Err(anyhow::anyhow!("Last.fm Scrobble Error {}: {}", status, text));
+            return Err(anyhow::anyhow!(
+                "Last.fm Scrobble Error {}: {}",
+                status,
+                text
+            ));
         }
 
         Ok(())

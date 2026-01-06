@@ -9,6 +9,7 @@
       config.lastfm = {
         apiKey: "",
         apiSecret: "",
+        username: "",
         sessionKey: null,
         enabled: true,
       };
@@ -79,6 +80,19 @@
         <div
           class="pt-4 border-t border-border grid grid-cols-1 md:grid-cols-2 gap-4"
         >
+          <label class="flex flex-col gap-2 md:col-span-2">
+            <span
+              class="text-xs font-medium text-subtext uppercase tracking-wider"
+              >Username</span
+            >
+            <input
+              type="text"
+              bind:value={config.lastfm.username}
+              class="bg-primary border border-border rounded-md p-2 text-sm text-text focus:border-accent focus:outline-none"
+              placeholder="Your Last.fm Username"
+            />
+          </label>
+
           <label class="flex flex-col gap-2">
             <span
               class="text-xs font-medium text-subtext uppercase tracking-wider"
@@ -91,6 +105,7 @@
               placeholder="Last.fm API Key"
             />
           </label>
+
           <label class="flex flex-col gap-2">
             <span
               class="text-xs font-medium text-subtext uppercase tracking-wider"

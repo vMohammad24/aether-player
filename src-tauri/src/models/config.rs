@@ -30,6 +30,7 @@ impl Default for AppConfig {
 pub struct LastFmConfig {
     pub api_key: String,
     pub api_secret: String,
+    pub username: String,
     pub session_key: Option<String>,
     pub enabled: bool,
 }
