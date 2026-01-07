@@ -334,6 +334,15 @@ impl QueueManager {
             repeat: state.repeat_mode.clone(),
         }
     }
+
+    pub async fn current_track(&self) -> Option<Track> {
+        let state = self.state.lock().await;
+        if let Some(idx) = state.current_index {
+            state.tracks.get(idx).cloned()
+        } else {
+            None
+        }
+    }
 }
 
 fn recalc_shuffle(state: &mut QueueState) {

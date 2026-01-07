@@ -1,18 +1,69 @@
 <script lang="ts">
+  import { commands } from "$lib/bindings";
+  import Button from "$lib/components/Button.svelte";
   import { config } from "$lib/stores/config.svelte";
-  import { Music2 } from "@lucide/svelte";
+  import { Check, LoaderCircle, Music2 } from "@lucide/svelte";
+  import { openUrl } from "@tauri-apps/plugin-opener";
+
+  let isLoggingIn = $state(false);
+  let error = $state<string | null>(null);
 
   function toggleLastFm() {
-    if (config.lastfm) {
-      config.lastfm.enabled = !config.lastfm.enabled;
+    if (config.lastfmSession) {
+      config.lastfmSession.enabled = !config.lastfmSession.enabled;
     } else {
-      config.lastfm = {
-        apiKey: "",
-        apiSecret: "",
+      config.lastfmSession = {
         username: "",
-        sessionKey: null,
+        sessionKey: "",
         enabled: true,
       };
+    }
+  }
+
+  async function startLogin() {
+    isLoggingIn = true;
+    error = null;
+
+    try {
+      const result = await commands.loginLastfm();
+      if (result.status === "ok") {
+        await openUrl(result.data.url);
+
+        const token = result.data.token;
+        let attempts = 0;
+        const maxAttempts = 60;
+
+        const interval = setInterval(async () => {
+          attempts++;
+          if (attempts > maxAttempts) {
+            clearInterval(interval);
+            isLoggingIn = false;
+            error = "Login timed out. Please try again.";
+            return;
+          }
+
+          if (!isLoggingIn) {
+            clearInterval(interval);
+            return;
+          }
+
+          try {
+            const res = await commands.finishLastfmLogin(token);
+            if (res.status === "ok") {
+              clearInterval(interval);
+              await config.forceSync();
+              isLoggingIn = false;
+            } else {
+            }
+          } catch (e) {}
+        }, 2000);
+      } else {
+        error = result.error;
+        isLoggingIn = false;
+      }
+    } catch (e) {
+      error = String(e);
+      isLoggingIn = false;
     }
   }
 </script>
@@ -56,19 +107,19 @@
         <label class="flex items-center gap-2 cursor-pointer select-none">
           <input
             type="checkbox"
-            checked={config.lastfm?.enabled ?? false}
+            checked={config.lastfmSession?.enabled ?? false}
             onchange={toggleLastFm}
             class="hidden"
           />
           <div
             class="w-10 h-5 rounded-full transition-colors relative {config
-              .lastfm?.enabled
+              .lastfmSession?.enabled
               ? 'bg-accent'
               : 'bg-primary'}"
           >
             <div
               class="absolute top-1 left-1 w-3 h-3 bg-text rounded-full transition-transform {config
-                .lastfm?.enabled
+                .lastfmSession?.enabled
                 ? 'translate-x-5'
                 : 'translate-x-0'}"
             ></div>
@@ -76,7 +127,7 @@
         </label>
       </div>
 
-      {#if config.lastfm?.enabled}
+      {#if config.lastfmSession?.enabled}
         <div
           class="pt-4 border-t border-border grid grid-cols-1 md:grid-cols-2 gap-4"
         >
@@ -85,48 +136,41 @@
               class="text-xs font-medium text-subtext uppercase tracking-wider"
               >Username</span
             >
-            <input
-              type="text"
-              bind:value={config.lastfm.username}
-              class="bg-primary border border-border rounded-md p-2 text-sm text-text focus:border-accent focus:outline-none"
-              placeholder="Your Last.fm Username"
-            />
+            <div class="flex items-center gap-2">
+              <input
+                type="text"
+                bind:value={config.lastfmSession.username}
+                readonly
+                class="bg-primary border border-border rounded-md p-2 text-sm text-text focus:border-accent focus:outline-none flex-1 disabled:opacity-50"
+                placeholder="Not connected"
+              />
+              {#if config.lastfmSession.sessionKey}
+                <span
+                  class="text-green flex items-center gap-1 text-xs font-medium px-2 py-1 bg-green/10 rounded"
+                >
+                  <Check size={12} /> Connected
+                </span>
+              {/if}
+            </div>
           </label>
 
-          <label class="flex flex-col gap-2">
-            <span
-              class="text-xs font-medium text-subtext uppercase tracking-wider"
-              >API Key</span
-            >
-            <input
-              type="password"
-              bind:value={config.lastfm.apiKey}
-              class="bg-primary border border-border rounded-md p-2 text-sm text-text focus:border-accent focus:outline-none"
-              placeholder="Last.fm API Key"
-            />
-          </label>
+          <div class="md:col-span-2 pt-2">
+            {#if error}
+              <div class="text-red text-sm mb-2">{error}</div>
+            {/if}
 
-          <label class="flex flex-col gap-2">
-            <span
-              class="text-xs font-medium text-subtext uppercase tracking-wider"
-              >API Secret</span
-            >
-            <input
-              type="password"
-              bind:value={config.lastfm.apiSecret}
-              class="bg-primary border border-border rounded-md p-2 text-sm text-text focus:border-accent focus:outline-none"
-              placeholder="Last.fm API Secret"
-            />
-          </label>
+            <Button onclick={startLogin} disabled={isLoggingIn}>
+              {#if isLoggingIn}
+                <LoaderCircle size={16} class="animate-spin" />
+                Waiting for approval...
+              {:else}
+                {config.lastfmSession.sessionKey
+                  ? "Reconnect Account"
+                  : "Connect Account"}
+              {/if}
+            </Button>
+          </div>
         </div>
-        <p class="text-xs text-subtext italic">
-          Get your api key from <a
-            href="https://www.last.fm/api/account/create"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="underline">here</a
-          >.
-        </p>
       {/if}
     </div>
   </div>

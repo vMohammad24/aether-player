@@ -1100,13 +1100,12 @@ impl LibraryProvider for LocalProvider {
             .await;
         let _ = sqlx::query("PRAGMA optimize").execute(&self.db).await;
 
-        if let Some(lastfm_config) = &self.config.lastfm {
+        if let Some(lastfm_config) = &self.config.lastfm_session {
             if lastfm_config.enabled {
                 log::info!("Last.fm enabled. Fetching artist metadata...");
                 let client = LastFmClient::new(
-                    lastfm_config.api_key.clone(),
-                    lastfm_config.api_secret.clone(),
-                    lastfm_config.username.clone(),
+                    Some(lastfm_config.username.clone()),
+                    Some(lastfm_config.session_key.clone()),
                 );
 
                 let artists: Vec<(String, String)> = sqlx::query_as(

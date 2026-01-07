@@ -367,6 +367,22 @@ async saveAppConfig(config: AppConfig) : Promise<Result<null, string>> {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async loginLastfm() : Promise<Result<LastFmAuthUrl, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("login_lastfm") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async finishLastfmLogin(token: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("finish_lastfm_login", { token }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -386,11 +402,12 @@ playerEvent: "player-event"
 /** user-defined types **/
 
 export type Album = { id: string; title: string; artistId: string; artistName: string; coverArt: string | null; year: number | null; trackCount: number | null }
-export type AppConfig = { theme: string; audioOutputDevice: string | null; sources: SourceConfig[]; audioEngine?: AudioBackend; lastfm: LastFmConfig | null }
+export type AppConfig = { theme: string; audioOutputDevice: string | null; sources: SourceConfig[]; audioEngine?: AudioBackend; lastfmSession: LastFmSessionConfig | null }
 export type Artist = { id: string; name: string; bio: string | null; imageUrl: string | null }
 export type AudioBackend = { type: "mpv"; options: MpvConfig }
 export type Genre = { name: string; trackCount: number }
-export type LastFmConfig = { apiKey: string; apiSecret: string; username: string; sessionKey: string | null; enabled: boolean }
+export type LastFmAuthUrl = { url: string; token: string }
+export type LastFmSessionConfig = { username: string; sessionKey: string; enabled: boolean }
 export type LibraryStats = { albumCount: number; trackCount: number; artistCount: number; totalDuration: number; averageBitrate: number }
 export type MpvConfig = { cache_mb: number | null; hardware_decoding: boolean; audio_device: string | null }
 export type PlayerEvent = { type: "TimeUpdate"; data: number } | { type: "DurationChange"; data: number } | { type: "Paused" } | { type: "Playing" } | { type: "Ended" } | { type: "Error"; data: string }

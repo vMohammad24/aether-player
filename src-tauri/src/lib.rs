@@ -76,7 +76,9 @@ pub async fn run() {
             commands::library::toggle_source,
             commands::config::get_default_config,
             commands::config::get_app_config,
-            commands::config::save_app_config
+            commands::config::save_app_config,
+            commands::lastfm::login_lastfm,
+            commands::lastfm::finish_lastfm_login
         ])
         .events(tauri_specta::collect_events![
             crate::models::entities::PlayerEvent
@@ -99,7 +101,7 @@ pub async fn run() {
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(
             tauri_plugin_log::Builder::default()
-                .level(log::LevelFilter::Debug)
+                .level(log::LevelFilter::Info)
                 .build(),
         )
         .plugin(tauri_plugin_sql::Builder::default().build())
@@ -135,9 +137,21 @@ pub async fn run() {
 
             let queue = QueueManager::new(player, providers);
 
-            app.manage(AppState::new(queue.clone()));
+            let mut lastfm_client = None;
+            if let Some(lfm_config) = &config.lastfm_session {
+                if lfm_config.enabled {
+                    let client = crate::util::lastfm::LastFmClient::new(
+                        Some(lfm_config.username.clone()),
+                        Some(lfm_config.session_key.clone()),
+                    );
+                    lastfm_client = Some(client);
+                }
+            }
+
+            app.manage(AppState::new(queue.clone(), lastfm_client.clone()));
 
             let handle = app.handle().clone();
+
             tauri::async_runtime::spawn(async move {
                 for source in &config.sources {
                     if let SourceConfig::Local {
@@ -163,13 +177,19 @@ pub async fn run() {
                     }
                 }
 
+                let state = handle.state::<AppState>();
+                crate::util::lastfm::start_scrobbling_service(
+                    state.queue.clone(),
+                    state.lastfm.clone(),
+                );
+
                 use tauri_specta::Event;
                 let mut rx = queue.player.subscribe();
+
                 while let Ok(event) = rx.recv().await {
                     let _ = event.emit(&handle);
                 }
             });
-
             Ok(())
         })
         .run(tauri::generate_context!())
