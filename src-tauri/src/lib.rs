@@ -14,6 +14,7 @@ pub mod util;
 use crate::models::{config::SourceConfig, AppConfig, AudioBackend};
 use crate::players::mpv::MpvPlayer;
 use crate::providers::local::LocalProvider;
+use crate::providers::subsonic::SubsonicProvider;
 use crate::queue::QueueManager;
 use crate::state::AppState;
 use crate::traits::{AudioEngine, LibraryProvider};
@@ -104,7 +105,7 @@ pub async fn run() {
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(
             tauri_plugin_log::Builder::default()
-                .level(log::LevelFilter::Info)
+                .level(log::LevelFilter::Debug)
                 .build(),
         )
         .plugin(tauri_plugin_sql::Builder::default().build())
@@ -170,26 +171,55 @@ pub async fn run() {
 
             tauri::async_runtime::spawn(async move {
                 for source in &config.sources {
-                    if let SourceConfig::Local {
-                        id, path, enabled, ..
-                    } = source
-                    {
-                        if !enabled {
-                            continue;
+                    match source {
+                        SourceConfig::Local {
+                            id, path, enabled, ..
+                        } => {
+                            if !enabled {
+                                continue;
+                            }
+                            if let Some(app_data_dir) = dirs::data_local_dir() {
+                                let data_dir = app_data_dir.join(crate::APP_IDENTIFIER);
+                                let db_path = data_dir.join(format!("library_{}.db", id));
+
+                                if let Ok(provider) = LocalProvider::new(
+                                    id.clone(),
+                                    &db_path,
+                                    &data_dir,
+                                    config.clone(),
+                                )
+                                .await
+                                {
+                                    let _ = provider.add_root(&path).await;
+
+                                    queue.add_provider(Arc::new(provider)).await;
+                                }
+                            }
                         }
-                        if let Some(app_data_dir) = dirs::data_local_dir() {
-                            let data_dir = app_data_dir.join(crate::APP_IDENTIFIER);
-                            let db_path = data_dir.join(format!("library_{}.db", id));
-
-                            if let Ok(provider) =
-                                LocalProvider::new(id.clone(), &db_path, &data_dir, config.clone())
-                                    .await
-                            {
-                                let _ = provider.add_root(&path).await;
-
+                        SourceConfig::Subsonic {
+                            id,
+                            name,
+                            url,
+                            username,
+                            token,
+                            salt,
+                            enabled,
+                        } => {
+                            if !enabled {
+                                continue;
+                            }
+                            if let Ok(provider) = SubsonicProvider::new(
+                                id.clone(),
+                                name.clone(),
+                                url.clone(),
+                                username.clone(),
+                                token.clone(),
+                                salt.clone(),
+                            ) {
                                 queue.add_provider(Arc::new(provider)).await;
                             }
                         }
+                        _ => {}
                     }
                 }
 

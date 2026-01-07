@@ -6,13 +6,20 @@
   import { confirm } from "$lib/stores/confirm.svelte";
   import { createMutation } from "$lib/stores/resource.svelte";
   import { toast } from "$lib/stores/toast.svelte";
+  import { md5 } from "$lib/util";
   import { Folder, Globe, Music2, RefreshCcw, Trash } from "@lucide/svelte";
   import { open } from "@tauri-apps/plugin-dialog";
 
   let showAddSourceModal = $state(false);
   let newSourceType = $state<"local" | "subsonic">("local");
+
   let localPath = $state("");
   let localName = $state("My Music");
+
+  let subsonicName = $state("My Subsonic");
+  let subsonicUrl = $state("");
+  let subsonicUser = $state("");
+  let subsonicPass = $state("");
 
   const KEYS_TO_INVALIDATE: (keyof typeof commands)[] = [
     "getRecentAlbums",
@@ -72,9 +79,27 @@
         enabled: true,
       };
 
-      const res = await addSource.trigger(newSource);
+      await addSource.trigger(newSource);
     } else {
-      toast.error("Subsonic not fully implemented in UI yet");
+      if (!subsonicUrl) return toast.error("URL is required");
+      if (!subsonicUser) return toast.error("Username is required");
+      if (!subsonicPass) return toast.error("Password is required");
+
+      const salt = Math.random().toString(36).substring(2, 10);
+      const token = md5(subsonicPass + salt);
+
+      const newSource: SourceConfig = {
+        type: "subsonic",
+        id: generateId(),
+        name: subsonicName,
+        url: subsonicUrl,
+        username: subsonicUser,
+        token: token,
+        salt: salt,
+        enabled: true,
+      };
+
+      await addSource.trigger(newSource);
     }
   }
 
@@ -95,6 +120,10 @@
   function resetSourceForm() {
     localPath = "";
     localName = "My Music";
+    subsonicName = "My Subsonic";
+    subsonicUrl = "";
+    subsonicUser = "";
+    subsonicPass = "";
   }
 </script>
 
@@ -161,8 +190,14 @@
           size="sm"
           onclick={() =>
             toast.promise(rescanSource.trigger(source.id), {
-              loading: `Rescanning ${source.name}...`,
-              success: "Rescan complete!",
+              loading:
+                source.type === "local"
+                  ? `Rescanning ${source.name}...`
+                  : `Cleared cache for ${source.name}`,
+              success:
+                source.type === "local"
+                  ? `Rescan of ${source.name} completed`
+                  : `Cache for ${source.name} cleared`,
               error: (e) => `Rescan failed: ${e}`,
             })}
           class="text-subtext hover:text-text h-10 w-10 p-0"
@@ -259,8 +294,48 @@
         </label>
       </div>
     {:else}
-      <div class="text-center py-8 text-subtext">
-        Subsonic support coming soon.
+      <div class="space-y-4">
+        <label class="flex flex-col gap-2">
+          <span class="text-sm font-medium text-subtext">Name</span>
+          <input
+            type="text"
+            bind:value={subsonicName}
+            class="bg-primary border border-border rounded-md p-2 text-text focus:border-accent focus:outline-none"
+            placeholder="My Subsonic"
+          />
+        </label>
+        <label class="flex flex-col gap-2">
+          <span class="text-sm font-medium text-subtext">Server URL</span>
+          <input
+            type="text"
+            bind:value={subsonicUrl}
+            class="bg-primary border border-border rounded-md p-2 text-text focus:border-accent focus:outline-none"
+            placeholder="https://music.example.com"
+          />
+          <p class="text-xs text-subtext">
+            The base URL of your Subsonic/Navidrome server.
+          </p>
+        </label>
+        <div class="grid grid-cols-2 gap-4">
+          <label class="flex flex-col gap-2">
+            <span class="text-sm font-medium text-subtext">Username</span>
+            <input
+              type="text"
+              bind:value={subsonicUser}
+              class="bg-primary border border-border rounded-md p-2 text-text focus:border-accent focus:outline-none"
+              placeholder="user"
+            />
+          </label>
+          <label class="flex flex-col gap-2">
+            <span class="text-sm font-medium text-subtext">Password</span>
+            <input
+              type="password"
+              bind:value={subsonicPass}
+              class="bg-primary border border-border rounded-md p-2 text-text focus:border-accent focus:outline-none"
+              placeholder="••••••"
+            />
+          </label>
+        </div>
       </div>
     {/if}
 

@@ -3,6 +3,7 @@ use crate::models::entities::{
     Album, Artist, Genre, LibraryStats, Playlist, Track, UnifiedSearchResult,
 };
 use crate::providers::local::LocalProvider;
+use crate::providers::subsonic::SubsonicProvider;
 use crate::state::AppState;
 use crate::traits::LibraryProvider;
 use rand::seq::SliceRandom;
@@ -40,6 +41,25 @@ pub async fn add_source(
                 .map_err(|e| e.to_string())?;
 
             provider.add_root(&path).await?;
+            provider.scan().await?;
+
+            state
+                .queue
+                .add_provider(std::sync::Arc::new(provider))
+                .await;
+        }
+        SourceConfig::Subsonic {
+            id,
+            name,
+            url,
+            username,
+            token,
+            salt,
+            ..
+        } => {
+            let provider = SubsonicProvider::new(id.clone(), name, url, username, token, salt)
+                .map_err(|e| e.to_string())?;
+
             provider.scan().await?;
 
             state
@@ -140,11 +160,30 @@ pub async fn toggle_source(
                         .join(crate::APP_IDENTIFIER);
                     let db_path = app_data_dir.join(format!("library_{}.db", id));
 
-                    let provider = LocalProvider::new(id.clone(), &db_path, &app_data_dir, config.clone())
-                        .await
-                        .map_err(|e| e.to_string())?;
+                    let provider =
+                        LocalProvider::new(id.clone(), &db_path, &app_data_dir, config.clone())
+                            .await
+                            .map_err(|e| e.to_string())?;
 
                     provider.add_root(&path).await?;
+                    state
+                        .queue
+                        .add_provider(std::sync::Arc::new(provider))
+                        .await;
+                }
+                SourceConfig::Subsonic {
+                    id,
+                    name,
+                    url,
+                    username,
+                    token,
+                    salt,
+                    ..
+                } => {
+                    let provider =
+                        SubsonicProvider::new(id.clone(), name, url, username, token, salt)
+                            .map_err(|e| e.to_string())?;
+
                     state
                         .queue
                         .add_provider(std::sync::Arc::new(provider))
