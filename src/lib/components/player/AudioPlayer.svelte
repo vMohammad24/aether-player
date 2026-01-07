@@ -6,6 +6,8 @@
   import { queue } from "$lib/stores/player/queue.svelte";
   import { formatDuration } from "$lib/util";
   import {
+    HeadphoneOff,
+    Headphones,
     Pause,
     Play,
     Repeat,
@@ -25,6 +27,7 @@
   let volume = $derived((player.state?.volume ?? 1) * 100);
   let shuffle = $derived(queue.data?.shuffle ?? false);
   let repeat = $derived(queue.data?.repeat ?? "off");
+  let exclusiveMode = $derived(player.state?.exclusive ?? false);
   let canNext = $derived(
     queue.data && queue.data?.currentIndex < queue.data?.tracks.length - 1
   );
@@ -202,6 +205,18 @@
   </div>
 
   <div class="flex items-center justify-end gap-3">
+    <button
+      class="text-subtext hover:text-text transition-colors p-2 rounded-md hover:bg-secondary/50"
+      onclick={() => player.toggleExclusiveMode.trigger(!exclusiveMode)}
+      aria-label="Toggle Exclusive mode"
+      use:tooltip={`Exclusive Mode: ${exclusiveMode ? "On" : "Off"}`}
+    >
+      {#if exclusiveMode}
+        <Headphones size={18} />
+      {:else}
+        <HeadphoneOff size={18} />
+      {/if}
+    </button>
     <button
       class="text-subtext hover:text-text transition-colors p-2 rounded-md hover:bg-secondary/50"
       onclick={() => (player.muted ? player.unmute() : player.mute())}

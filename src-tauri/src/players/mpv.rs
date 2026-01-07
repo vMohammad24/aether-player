@@ -26,6 +26,7 @@ enum EngineCommand {
     GetState(oneshot::Sender<PlayerState>),
     GetAudioDevices(oneshot::Sender<Result<Vec<AudioDevice>, String>>),
     SetAudioDevice(Option<String>),
+    ToggleExclusiveMode(Option<bool>),
 }
 
 #[derive(Clone)]
@@ -76,6 +77,9 @@ impl MpvPlayer {
                 if let Err(e) = mpv.observe_property("volume", libmpv2::Format::Double, 0) {
                     log::warn!("MPV: Failed to observe volume: {}", e);
                 }
+                if let Err(e) = mpv.observe_property("audio-exclusive", libmpv2::Format::Flag, 0) {
+                    log::warn!("MPV: Failed to observe audio-exclusive: {}", e);
+                }
 
                 let mut cached_state = PlayerState::default();
 
@@ -110,7 +114,14 @@ impl MpvPlayer {
                                         cached_state.volume = (v / 100.0) as f32;
                                     }
                                 }
-                                _ => {}
+                                "audio-exclusive" => {
+                                    if let PropertyData::Flag(v) = change {
+                                        cached_state.exclusive = v;
+                                    }
+                                }
+                                _ => {
+                                    log::warn!("MPV: Unhandled property change: {}", name);
+                                }
                             },
                             Event::EndFile(0) => {
                                 let _ = event_tx_actor.send(PlayerEvent::Ended);
@@ -189,6 +200,17 @@ impl MpvPlayer {
                                     log::error!("MPV: Failed to set audio device '{}': {}", val, e);
                                 }
                             }
+                            EngineCommand::ToggleExclusiveMode(exclusive) => {
+                                let val = exclusive.unwrap_or(!cached_state.exclusive);
+                                if let Err(e) = mpv.set_property("audio-exclusive", val) {
+                                    log::error!(
+                                        "MPV: Failed to set audio exclusive mode '{}': {}",
+                                        val,
+                                        e
+                                    );
+                                }
+                                cached_state.exclusive = val;
+                            }
                         },
                         Err(mpsc::error::TryRecvError::Empty) => {
                             std::thread::sleep(Duration::from_millis(16));
@@ -253,6 +275,14 @@ impl AudioEngine for MpvPlayer {
 
     async fn set_audio_device(&self, device_id: Option<String>) -> Result<(), String> {
         self.send(EngineCommand::SetAudioDevice(device_id)).await
+    }
+
+    async fn toggle_exclusive_mode(&self, exclusive: Option<bool>) -> Result<bool, String> {
+        let _ = self
+            .send(EngineCommand::ToggleExclusiveMode(exclusive))
+            .await;
+        let state = self.get_state().await;
+        Ok(state.exclusive)
     }
 
     fn subscribe(&self) -> broadcast::Receiver<PlayerEvent> {

@@ -8,6 +8,7 @@ pub struct PlayerState {
     pub position: f64,
     pub duration: f64,
     pub volume: f32,
+    pub exclusive: bool,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]

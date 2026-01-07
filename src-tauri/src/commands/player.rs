@@ -88,3 +88,12 @@ pub async fn set_audio_device(
 ) -> Result<(), String> {
     state.queue.player.set_audio_device(device_id).await
 }
+
+#[tauri::command]
+#[specta::specta]
+pub async fn toggle_exclusive_mode(
+    state: State<'_, AppState>,
+    exclusive: Option<bool>,
+) -> Result<bool, String> {
+    state.queue.player.toggle_exclusive_mode(exclusive).await
+}

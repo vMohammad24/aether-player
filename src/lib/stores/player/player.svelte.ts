@@ -66,6 +66,11 @@ class PlayerStore {
     prev = createMutation('prev', { invalidate: 'getQueue' });
 
     playTrack = createMutation('playTrack', { invalidate: 'getQueue' });
+    toggleExclusiveMode = createMutation('toggleExclusiveMode', {
+        onSuccess: (exclusive: boolean) => {
+            if (this.state) this.state.exclusive = exclusive;
+        }
+    });
 
     private _seek = createMutation('seek');
     async seek(seconds: number) {

@@ -109,6 +109,14 @@ async setAudioDevice(deviceId: string | null) : Promise<Result<null, string>> {
     else return { status: "error", error: e  as any };
 }
 },
+async toggleExclusiveMode(exclusive: boolean | null) : Promise<Result<boolean, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("toggle_exclusive_mode", { exclusive }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async getQueue() : Promise<Result<Queue, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_queue") };
@@ -429,7 +437,7 @@ export type LastFmSessionConfig = { username: string; sessionKey: string; enable
 export type LibraryStats = { albumCount: number; trackCount: number; artistCount: number; totalDuration: number; averageBitrate: number }
 export type MpvConfig = { cache_mb: number | null; hardware_decoding: boolean; audio_device: string | null }
 export type PlayerEvent = { type: "TimeUpdate"; data: number } | { type: "DurationChange"; data: number } | { type: "Paused" } | { type: "Playing" } | { type: "Ended" } | { type: "Error"; data: string }
-export type PlayerState = { paused: boolean; position: number; duration: number; volume: number }
+export type PlayerState = { paused: boolean; position: number; duration: number; volume: number; exclusive: boolean }
 export type Playlist = { id: string; name: string; owner: string; trackCount: number; coverArt: string | null; createdAt: string }
 export type Queue = { id: string; tracks: Track[]; currentIndex: number; shuffle: boolean; repeat: RepeatMode }
 export type RepeatMode = "off" | "all" | "one"
