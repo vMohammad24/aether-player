@@ -123,13 +123,19 @@ impl MpvPlayer {
                     match cmd_rx.try_recv() {
                         Ok(cmd) => match cmd {
                             EngineCommand::Load { url, auto_play } => {
-                                let mode = if auto_play { "replace" } else { "append-play" };
-                                if let Err(e) = mpv.command("loadfile", &[&url, mode]) {
+                                if let Err(e) = mpv.command("loadfile", &[&url, "replace"]) {
                                     log::error!("MPV Load Error: {}", e);
-                                } else if auto_play {
-                                    let _ = mpv.set_property("pause", false);
-                                    cached_state.paused = false;
-                                    let _ = event_tx_actor.send(PlayerEvent::Playing);
+                                } else {
+                                    let should_pause = !auto_play;
+                                    let _ = mpv.set_property("pause", should_pause);
+                                    cached_state.paused = should_pause;
+
+                                    let event = if should_pause {
+                                        PlayerEvent::Paused
+                                    } else {
+                                        PlayerEvent::Playing
+                                    };
+                                    let _ = event_tx_actor.send(event);
                                 }
                             }
                             EngineCommand::Play => {

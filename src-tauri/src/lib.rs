@@ -137,7 +137,13 @@ pub async fn run() {
             let player = create_audio_engine(&config)
                 .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
 
-            let queue = QueueManager::new(player, providers);
+            let app_data_dir = app
+                .path()
+                .app_data_dir()
+                .expect("failed to get app data dir");
+            let state_path = app_data_dir.join("playback_state.json");
+
+            let queue = QueueManager::new(player, providers, state_path);
 
             let mut lastfm_client = None;
             if let Some(lfm_config) = &config.lastfm_session {
@@ -185,6 +191,8 @@ pub async fn run() {
                         }
                     }
                 }
+
+                queue.load_state().await;
 
                 let state = handle.state::<AppState>();
 

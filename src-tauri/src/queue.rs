@@ -1,10 +1,11 @@
 use crate::models::{
     entities::{PlayerEvent, Track},
-    player::{Queue, RepeatMode},
+    player::{PersistedPlayer, PersistedQueue, PersistedState, Queue, RepeatMode},
 };
 use crate::traits::{AudioEngine, LibraryProvider};
 use rand::seq::SliceRandom;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 
@@ -12,6 +13,7 @@ pub struct QueueManager {
     state: Mutex<QueueState>,
     pub player: Box<dyn AudioEngine>,
     providers: Arc<RwLock<HashMap<String, Arc<dyn LibraryProvider>>>>,
+    state_path: PathBuf,
 }
 
 #[derive(Default)]
@@ -27,18 +29,32 @@ impl QueueManager {
     pub fn new(
         player: Box<dyn AudioEngine>,
         providers: HashMap<String, Arc<dyn LibraryProvider>>,
+        state_path: PathBuf,
     ) -> Arc<Self> {
         let providers = Arc::new(RwLock::new(providers));
+
+        let initial_state = QueueState::default();
+
         let qm = Arc::new(Self {
-            state: Mutex::new(QueueState::default()),
+            state: Mutex::new(initial_state),
             player,
             providers: providers.clone(),
+            state_path,
         });
 
         let qm_clone = qm.clone();
         tokio::spawn(async move {
             let mut rx = qm_clone.player.subscribe();
             while let Ok(event) = rx.recv().await {
+                match event {
+                    PlayerEvent::Paused | PlayerEvent::Playing | PlayerEvent::Ended => {
+                        let _ = qm_clone.save().await;
+                    }
+                    PlayerEvent::TimeUpdate(_) => {}
+                    PlayerEvent::DurationChange(_) => {}
+                    PlayerEvent::Error(_) => {}
+                }
+
                 if let PlayerEvent::Ended = event {
                     let _ = qm_clone.on_playback_ended().await;
                 }
@@ -46,6 +62,75 @@ impl QueueManager {
         });
 
         qm
+    }
+
+    pub async fn load_state(&self) {
+        if let Ok(content) = std::fs::read_to_string(&self.state_path) {
+            if let Ok(persisted) = serde_json::from_str::<PersistedState>(&content) {
+                let pq = persisted.queue;
+                let mut tracks = Vec::new();
+                for id in &pq.tracks {
+                    if let Some(track) = self.get_track(id).await {
+                        tracks.push(track);
+                    }
+                }
+
+                let mut current_track_to_load = None;
+                let mut state = self.state.lock().await;
+                if tracks.len() == pq.tracks.len() {
+                    state.tracks = tracks;
+                    state.current_index = pq.current_index;
+                    state.repeat_mode = pq.repeat_mode;
+                    state.shuffle = pq.shuffle;
+                    state.shuffled_indices = pq.shuffled_indices;
+                } else {
+                    state.tracks = tracks;
+                    state.repeat_mode = pq.repeat_mode;
+                    if pq.shuffle {
+                        recalc_shuffle(&mut state);
+                    }
+                }
+
+                if let Some(idx) = state.current_index {
+                    current_track_to_load = state.tracks.get(idx).cloned();
+                }
+
+                drop(state);
+                let _ = self.player.set_volume(persisted.player.volume).await;
+
+                if let Some(track) = current_track_to_load {
+                    if let Ok(_) = self.load_track(&track, false).await {
+                        let _ = self.player.seek(persisted.player.position).await;
+                    }
+                }
+            }
+        }
+    }
+
+    pub async fn save(&self) -> Result<(), String> {
+        let state = self.state.lock().await;
+        let player_state = self.player.get_state().await;
+
+        let persisted = PersistedState {
+            queue: PersistedQueue {
+                tracks: state.tracks.clone().iter().map(|t| t.id.clone()).collect(),
+                current_index: state.current_index,
+                repeat_mode: state.repeat_mode.clone(),
+                shuffle: state.shuffle,
+                shuffled_indices: state.shuffled_indices.clone(),
+            },
+            player: PersistedPlayer {
+                volume: player_state.volume,
+                position: player_state.position,
+            },
+        };
+
+        let json = serde_json::to_string_pretty(&persisted).map_err(|e| e.to_string())?;
+        if let Some(parent) = self.state_path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        std::fs::write(&self.state_path, json).map_err(|e| e.to_string())?;
+        Ok(())
     }
 
     pub async fn get_provider(&self, id: &str) -> Option<Arc<dyn LibraryProvider>> {
@@ -111,6 +196,7 @@ impl QueueManager {
         if was_playing_removed {
             let _ = self.player.stop().await;
         }
+        let _ = self.save().await;
     }
 
     pub async fn add_track(&self, track: Track) {
@@ -120,6 +206,8 @@ impl QueueManager {
             let len = state.tracks.len();
             state.shuffled_indices.push(len - 1);
         }
+        drop(state);
+        let _ = self.save().await;
     }
 
     pub async fn add_tracks(&self, tracks: Vec<Track>) {
@@ -129,6 +217,8 @@ impl QueueManager {
             let len = state.tracks.len();
             state.shuffled_indices.push(len - 1);
         }
+        drop(state);
+        let _ = self.save().await;
     }
 
     pub async fn add_next(&self, track: Track) {
@@ -148,6 +238,8 @@ impl QueueManager {
                 state.shuffled_indices.push(len - 1);
             }
         }
+        drop(state);
+        let _ = self.save().await;
     }
 
     pub async fn remove(&self, index: usize) {
@@ -170,6 +262,8 @@ impl QueueManager {
                 }
             }
         }
+        drop(state);
+        let _ = self.save().await;
     }
 
     pub async fn clear(&self) {
@@ -177,6 +271,8 @@ impl QueueManager {
         state.tracks.clear();
         state.shuffled_indices.clear();
         state.current_index = None;
+        drop(state);
+        let _ = self.save().await;
     }
 
     pub async fn toggle_shuffle(&self) -> bool {
@@ -187,12 +283,17 @@ impl QueueManager {
         } else {
             state.shuffled_indices.clear();
         }
-        state.shuffle
+        let res = state.shuffle;
+        drop(state);
+        let _ = self.save().await;
+        res
     }
 
     pub async fn set_repeat(&self, mode: RepeatMode) {
         let mut state = self.state.lock().await;
         state.repeat_mode = mode;
+        drop(state);
+        let _ = self.save().await;
     }
 
     pub async fn play_now(&self, track: Track) -> Result<(), String> {
@@ -206,7 +307,9 @@ impl QueueManager {
         }
         drop(state);
 
-        self.load_track(&track).await
+        let res = self.load_track(&track, true).await;
+        let _ = self.save().await;
+        res
     }
 
     pub async fn play_index(&self, index: usize) -> Result<(), String> {
@@ -215,7 +318,9 @@ impl QueueManager {
             state.current_index = Some(index);
             let track = state.tracks[index].clone();
             drop(state);
-            self.load_track(&track).await
+            let res = self.load_track(&track, true).await;
+            let _ = self.save().await;
+            res
         } else {
             Err("Index out of bounds".to_string())
         }
@@ -228,7 +333,7 @@ impl QueueManager {
                 if curr < state.tracks.len() {
                     let track = state.tracks[curr].clone();
                     drop(state);
-                    return self.load_track(&track).await;
+                    return self.load_track(&track, true).await;
                 }
             }
         }
@@ -275,7 +380,9 @@ impl QueueManager {
             state.current_index = Some(idx);
             let track = state.tracks[idx].clone();
             drop(state);
-            self.load_track(&track).await
+            let res = self.load_track(&track, true).await;
+            let _ = self.save().await;
+            res
         } else {
             Ok(())
         }
@@ -288,19 +395,21 @@ impl QueueManager {
                 state.current_index = Some(curr - 1);
                 let track = state.tracks[curr - 1].clone();
                 drop(state);
-                return self.load_track(&track).await;
+                let res = self.load_track(&track, true).await;
+                let _ = self.save().await;
+                return res;
             }
         }
         Ok(())
     }
 
-    async fn load_track(&self, track: &Track) -> Result<(), String> {
+    async fn load_track(&self, track: &Track, auto_play: bool) -> Result<(), String> {
         let providers = self.providers.read().await;
 
         if let Some(pid) = &track.provider_id {
             if let Some(provider) = providers.get(pid) {
                 if let Ok(stream) = provider.resolve_stream(&track.id).await {
-                    return self.player.load(stream, true).await;
+                    return self.player.load(stream, auto_play).await;
                 }
             }
         }
@@ -312,12 +421,12 @@ impl QueueManager {
                     .strip_prefix(&format!("{}:", pid))
                     .unwrap_or(&track.id);
                 if let Ok(stream) = provider.resolve_stream(real_id).await {
-                    return self.player.load(stream, true).await;
+                    return self.player.load(stream, auto_play).await;
                 }
             }
 
             if let Ok(stream) = provider.resolve_stream(&track.id).await {
-                return self.player.load(stream, true).await;
+                return self.player.load(stream, auto_play).await;
             }
         }
 

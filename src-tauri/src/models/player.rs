@@ -36,3 +36,27 @@ pub struct AudioDevice {
     pub is_default: bool,
     pub is_current: bool,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct PersistedQueue {
+    pub tracks: Vec<String>,
+    pub current_index: Option<usize>,
+    pub repeat_mode: RepeatMode,
+    pub shuffle: bool,
+    pub shuffled_indices: Vec<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct PersistedPlayer {
+    pub volume: f32,
+    pub position: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct PersistedState {
+    pub queue: PersistedQueue,
+    pub player: PersistedPlayer,
+}
