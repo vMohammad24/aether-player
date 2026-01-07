@@ -1,13 +1,11 @@
+use crate::models::player::AudioDevice;
 use crate::models::{player::PlayerState, player::RepeatMode};
 use crate::state::AppState;
 use tauri::State;
 
 #[tauri::command]
 #[specta::specta]
-pub async fn play_track(
-    state: State<'_, AppState>,
-    track_id: String,
-) -> Result<(), String> {
+pub async fn play_track(state: State<'_, AppState>, track_id: String) -> Result<(), String> {
     let track = state
         .queue
         .get_track(&track_id)
@@ -75,4 +73,18 @@ pub async fn toggle_shuffle(state: State<'_, AppState>) -> Result<bool, String> 
 #[specta::specta]
 pub async fn get_player_state(state: State<'_, AppState>) -> Result<PlayerState, String> {
     Ok(state.queue.player.get_state().await)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn get_audio_devices(state: State<'_, AppState>) -> Result<Vec<AudioDevice>, String> {
+    state.queue.player.get_audio_devices().await
+}
+#[tauri::command]
+#[specta::specta]
+pub async fn set_audio_device(
+    state: State<'_, AppState>,
+    device_id: Option<String>,
+) -> Result<(), String> {
+    state.queue.player.set_audio_device(device_id).await
 }

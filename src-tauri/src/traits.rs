@@ -1,6 +1,6 @@
 use crate::models::{
     entities::{Genre, LibraryStats, PlayerEvent, Playlist, UnifiedSearchResult},
-    Album, Artist, PlayerState, Track,
+    Album, Artist, AudioDevice, PlayerState, Track,
 };
 use async_trait::async_trait;
 use tokio::sync::broadcast;
@@ -82,6 +82,9 @@ pub trait AudioEngine: Send + Sync {
     async fn set_volume(&self, vol: f32) -> Result<(), String>;
 
     async fn get_state(&self) -> PlayerState;
+
+    async fn get_audio_devices(&self) -> Result<Vec<AudioDevice>, String>;
+    async fn set_audio_device(&self, device_id: Option<String>) -> Result<(), String>;
 
     fn subscribe(&self) -> broadcast::Receiver<PlayerEvent>;
 }

@@ -27,3 +27,12 @@ pub enum RepeatMode {
     All,
     One,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct AudioDevice {
+    pub id: String,
+    pub name: String,
+    pub is_default: bool,
+    pub is_current: bool,
+}

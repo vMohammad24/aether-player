@@ -1,6 +1,6 @@
 use crate::models::config::MpvConfig;
 use crate::models::entities::PlayerEvent;
-use crate::models::PlayerState;
+use crate::models::{AudioDevice, PlayerState};
 use crate::traits::{AudioEngine, AudioStream};
 use async_trait::async_trait;
 use libmpv2::{
@@ -10,6 +10,12 @@ use libmpv2::{
 use std::time::Duration;
 use tokio::sync::{broadcast, mpsc, oneshot};
 
+#[derive(serde::Deserialize)]
+struct MpvDeviceEntry {
+    name: String,
+    description: String,
+}
+
 enum EngineCommand {
     Load { url: String, auto_play: bool },
     Play,
@@ -18,6 +24,8 @@ enum EngineCommand {
     Seek(f64),
     SetVolume(f32),
     GetState(oneshot::Sender<PlayerState>),
+    GetAudioDevices(oneshot::Sender<Result<Vec<AudioDevice>, String>>),
+    SetAudioDevice(Option<String>),
 }
 
 #[derive(Clone)]
@@ -142,6 +150,39 @@ impl MpvPlayer {
                             EngineCommand::GetState(tx) => {
                                 let _ = tx.send(cached_state.clone());
                             }
+                            EngineCommand::GetAudioDevices(tx) => {
+                                let res = match mpv.get_property::<String>("audio-device-list") {
+                                    Ok(json) => {
+                                        match serde_json::from_str::<Vec<MpvDeviceEntry>>(&json) {
+                                            Ok(devices) => Ok(devices
+                                                .into_iter()
+                                                .map(|d| AudioDevice {
+                                                    id: d.name.clone(),
+                                                    name: d.description,
+                                                    is_default: d.name == "auto",
+                                                    is_current: match mpv
+                                                        .get_property::<String>("audio-device")
+                                                    {
+                                                        Ok(current) => d.name == current,
+                                                        Err(_) => false,
+                                                    },
+                                                })
+                                                .collect()),
+                                            Err(e) => {
+                                                Err(format!("Failed to parse device list: {}", e))
+                                            }
+                                        }
+                                    }
+                                    Err(e) => Err(format!("MPV Error: {}", e)),
+                                };
+                                let _ = tx.send(res);
+                            }
+                            EngineCommand::SetAudioDevice(id) => {
+                                let val = id.unwrap_or_else(|| "auto".to_string());
+                                if let Err(e) = mpv.set_property("audio-device", val.clone()) {
+                                    log::error!("MPV: Failed to set audio device '{}': {}", val, e);
+                                }
+                            }
                         },
                         Err(mpsc::error::TryRecvError::Empty) => {
                             std::thread::sleep(Duration::from_millis(16));
@@ -196,6 +237,16 @@ impl AudioEngine for MpvPlayer {
         } else {
             PlayerState::default()
         }
+    }
+
+    async fn get_audio_devices(&self) -> Result<Vec<AudioDevice>, String> {
+        let (tx, rx) = oneshot::channel();
+        self.send(EngineCommand::GetAudioDevices(tx)).await?;
+        rx.await.map_err(|_| "Actor dropped".to_string())?
+    }
+
+    async fn set_audio_device(&self, device_id: Option<String>) -> Result<(), String> {
+        self.send(EngineCommand::SetAudioDevice(device_id)).await
     }
 
     fn subscribe(&self) -> broadcast::Receiver<PlayerEvent> {

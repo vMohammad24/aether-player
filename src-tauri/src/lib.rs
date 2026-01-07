@@ -42,6 +42,8 @@ pub async fn run() {
             commands::player::set_repeat,
             commands::player::toggle_shuffle,
             commands::player::get_player_state,
+            commands::player::get_audio_devices,
+            commands::player::set_audio_device,
             commands::queue::get_queue,
             commands::queue::add_to_queue,
             commands::queue::add_to_queue_multiple,

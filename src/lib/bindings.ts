@@ -93,6 +93,22 @@ async getPlayerState() : Promise<Result<PlayerState, string>> {
     else return { status: "error", error: e  as any };
 }
 },
+async getAudioDevices() : Promise<Result<AudioDevice[], string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("get_audio_devices") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async setAudioDevice(deviceId: string | null) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("set_audio_device", { deviceId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async getQueue() : Promise<Result<Queue, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("get_queue") };
@@ -405,6 +421,7 @@ export type Album = { id: string; title: string; artistId: string; artistName: s
 export type AppConfig = { theme: string; audioOutputDevice: string | null; sources: SourceConfig[]; audioEngine?: AudioBackend; lastfmSession: LastFmSessionConfig | null; discordRpc: DiscordRpcConfig | null }
 export type Artist = { id: string; name: string; bio: string | null; imageUrl: string | null }
 export type AudioBackend = { type: "mpv"; options: MpvConfig }
+export type AudioDevice = { id: string; name: string; isDefault: boolean; isCurrent: boolean }
 export type DiscordRpcConfig = { enabled: boolean; showDetails?: boolean; showState?: boolean; showTime?: boolean; detailsFormat?: string; stateFormat?: string; activityOnPause?: boolean; showArtistIcon?: boolean }
 export type Genre = { name: string; trackCount: number }
 export type LastFmAuthUrl = { url: string; token: string }

@@ -2,12 +2,16 @@
   import { commands } from "$lib/bindings";
   import Button from "$lib/components/Button.svelte";
   import { config } from "$lib/stores/config.svelte";
+  import { createMutation, createResource } from "$lib/stores/resource.svelte";
   import { Check, Gamepad2, LoaderCircle, Music2 } from "@lucide/svelte";
   import { openUrl } from "@tauri-apps/plugin-opener";
 
   let isLoggingIn = $state(false);
   let error = $state<string | null>(null);
-
+  const devices = createResource("getAudioDevices");
+  const setDevice = createMutation("setAudioDevice", {
+    invalidate: "getAudioDevices",
+  });
   function toggleLastFm() {
     if (config.lastfmSession) {
       config.lastfmSession.enabled = !config.lastfmSession.enabled;
@@ -92,6 +96,36 @@
       </span>
       <div class="text-sm text-text">
         Currently using <span class="font-mono p-1">MPV</span>
+      </div>
+      <div class="mt-2">
+        <label
+          for="audio-device"
+          class="block text-sm font-medium text-subtext mb-1"
+          >Audio Output Device</label
+        >
+        <select
+          id="audio-device"
+          class="w-full bg-primary border border-border rounded-md p-2 text-sm text-text focus:border-accent focus:outline-none"
+          bind:value={config.audioOutputDevice}
+          onchange={() => setDevice.trigger(config.audioOutputDevice)}
+        >
+          <option value="" disabled>
+            {#if devices.loading}
+              Loading devices...
+            {:else if devices.error}
+              Error loading devices
+            {:else}
+              Select an audio device
+            {/if}
+          </option>
+          {#each devices.data ?? [] as device}
+            <option value={device.id}>
+              {device.name}
+              {device.isDefault ? "(Default)" : ""}{" "}
+              {device.isCurrent ? "(Current)" : ""}
+            </option>
+          {/each}
+        </select>
       </div>
     </div>
   </div>

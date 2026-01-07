@@ -4,4 +4,4 @@ pub mod player;
 
 pub use config::{AppConfig, AudioBackend};
 pub use entities::{Album, Artist, Track};
-pub use player::PlayerState;
+pub use player::{AudioDevice, PlayerState};
