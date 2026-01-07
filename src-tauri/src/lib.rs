@@ -187,6 +187,33 @@ pub async fn run() {
                 }
 
                 let state = handle.state::<AppState>();
+
+                if let Some(target_device) = &config.audio_output_device {
+                    match &config.audio_engine {
+                        AudioBackend::Mpv(mpv_opts) => {
+                            if mpv_opts.audio_device.is_none() {
+                                let player = &state.queue.player;
+                                match player.get_audio_devices().await {
+                                    Ok(devices) => {
+                                        if devices.iter().any(|d| d.id == *target_device) {
+                                            if let Err(e) = player
+                                                .set_audio_device(Some(target_device.clone()))
+                                                .await
+                                            {
+                                                log::error!(
+                                                    "Failed to set audio device to {}: {}",
+                                                    target_device,
+                                                    e
+                                                );
+                                            }
+                                        }
+                                    }
+                                    Err(e) => log::error!("Failed to get audio devices: {}", e),
+                                }
+                            }
+                        }
+                    }
+                }
                 crate::util::lastfm::start_scrobbling_service(
                     state.queue.clone(),
                     state.lastfm.clone(),
