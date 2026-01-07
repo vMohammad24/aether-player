@@ -29,7 +29,9 @@
   let repeat = $derived(queue.data?.repeat ?? "off");
   let exclusiveMode = $derived(player.state?.exclusive ?? false);
   let canNext = $derived(
-    queue.data && queue.data?.currentIndex < queue.data?.tracks.length - 1
+    queue.data &&
+      (queue.data?.currentIndex < queue.data?.tracks.length - 1 ||
+        queue.data.shuffle)
   );
   let canBack = $derived(queue.data && queue.data?.currentIndex > 0);
   let coverArt = $derived(
