@@ -159,6 +159,43 @@ struct ArtistInfoResponse {
     artist: ArtistInfo,
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct TrackArtist {
+    pub name: String,
+    pub mbid: Option<String>,
+    pub url: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct TrackAlbum {
+    pub artist: String,
+    pub title: String,
+    pub mbid: Option<String>,
+    pub url: String,
+    pub image: Option<Vec<Image>>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct TrackInfo {
+    pub name: String,
+    pub mbid: Option<String>,
+    pub url: String,
+    pub duration: Option<String>,
+    pub listeners: String,
+    pub playcount: String,
+    pub artist: TrackArtist,
+    pub album: Option<TrackAlbum>,
+    pub toptags: Option<Tags>,
+    pub wiki: Option<Bio>,
+    pub userplaycount: Option<String>,
+    pub userloved: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct TrackInfoResponse {
+    track: TrackInfo,
+}
+
 #[derive(Deserialize)]
 pub struct LastFmSession {
     pub name: String,
@@ -307,6 +344,40 @@ impl LastFmClient {
             .await
             .context("Failed to parse Last.fm response")?;
         Ok(data.artist)
+    }
+
+    pub async fn get_track_info(&self, artist: &str, track: &str) -> Result<TrackInfo> {
+        let mut params = HashMap::new();
+        params.insert("method".to_string(), "track.getInfo".to_string());
+        params.insert("artist".to_string(), artist.to_string());
+        params.insert("track".to_string(), track.to_string());
+        params.insert("api_key".to_string(), API_KEY.to_string());
+        params.insert("format".to_string(), "json".to_string());
+        params.insert("autocorrect".to_string(), "1".to_string());
+
+        if let Some(username) = &self.username {
+            params.insert("username".to_string(), username.clone());
+        }
+
+        let res = self
+            .client
+            .get(API_ROOT)
+            .query(&params)
+            .send()
+            .await
+            .context("Failed to send Last.fm request")?;
+
+        if !res.status().is_success() {
+            let status = res.status();
+            let text = res.text().await.unwrap_or_default();
+            return Err(anyhow::anyhow!("Last.fm API Error {}: {}", status, text));
+        }
+
+        let data: TrackInfoResponse = res
+            .json()
+            .await
+            .context("Failed to parse Last.fm response")?;
+        Ok(data.track)
     }
 
     pub async fn scrobble(

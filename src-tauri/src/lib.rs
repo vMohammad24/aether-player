@@ -148,7 +148,14 @@ pub async fn run() {
                 }
             }
 
-            app.manage(AppState::new(queue.clone(), lastfm_client.clone()));
+            let discord_config = config.discord_rpc.clone().unwrap_or_default();
+            let discord_rpc = crate::util::discord::DiscordRpc::new(discord_config);
+
+            app.manage(AppState::new(
+                queue.clone(),
+                lastfm_client.clone(),
+                discord_rpc,
+            ));
 
             let handle = app.handle().clone();
 
@@ -180,6 +187,11 @@ pub async fn run() {
                 let state = handle.state::<AppState>();
                 crate::util::lastfm::start_scrobbling_service(
                     state.queue.clone(),
+                    state.lastfm.clone(),
+                );
+                crate::util::discord::start_discord_rpc_service(
+                    state.queue.clone(),
+                    state.discord.clone(),
                     state.lastfm.clone(),
                 );
 

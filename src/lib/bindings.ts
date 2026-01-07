@@ -402,9 +402,10 @@ playerEvent: "player-event"
 /** user-defined types **/
 
 export type Album = { id: string; title: string; artistId: string; artistName: string; coverArt: string | null; year: number | null; trackCount: number | null }
-export type AppConfig = { theme: string; audioOutputDevice: string | null; sources: SourceConfig[]; audioEngine?: AudioBackend; lastfmSession: LastFmSessionConfig | null }
+export type AppConfig = { theme: string; audioOutputDevice: string | null; sources: SourceConfig[]; audioEngine?: AudioBackend; lastfmSession: LastFmSessionConfig | null; discordRpc: DiscordRpcConfig | null }
 export type Artist = { id: string; name: string; bio: string | null; imageUrl: string | null }
 export type AudioBackend = { type: "mpv"; options: MpvConfig }
+export type DiscordRpcConfig = { enabled: boolean; showDetails?: boolean; showState?: boolean; showTime?: boolean; detailsFormat?: string; stateFormat?: string; activityOnPause?: boolean; showArtistIcon?: boolean }
 export type Genre = { name: string; trackCount: number }
 export type LastFmAuthUrl = { url: string; token: string }
 export type LastFmSessionConfig = { username: string; sessionKey: string; enabled: boolean }

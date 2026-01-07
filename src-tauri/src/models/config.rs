@@ -11,6 +11,7 @@ pub struct AppConfig {
     #[serde(default)]
     pub audio_engine: AudioBackend,
     pub lastfm_session: Option<LastFmSessionConfig>,
+    pub discord_rpc: Option<DiscordRpcConfig>,
 }
 
 impl Default for AppConfig {
@@ -21,8 +22,57 @@ impl Default for AppConfig {
             sources: Vec::new(),
             audio_engine: AudioBackend::default(),
             lastfm_session: None,
+            discord_rpc: Some(DiscordRpcConfig::default()),
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscordRpcConfig {
+    pub enabled: bool,
+    #[serde(default = "default_true")]
+    pub show_details: bool,
+    #[serde(default = "default_true")]
+    pub show_state: bool,
+    #[serde(default = "default_true")]
+    pub show_time: bool,
+
+    #[serde(default = "default_details_format")]
+    pub details_format: String,
+    #[serde(default = "default_state_format")]
+    pub state_format: String,
+    #[serde(default = "default_true")]
+    pub activity_on_pause: bool,
+    #[serde(default = "default_true")]
+    pub show_artist_icon: bool,
+}
+
+impl Default for DiscordRpcConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            show_details: true,
+            show_state: true,
+            show_time: true,
+            details_format: default_details_format(),
+            state_format: default_state_format(),
+            activity_on_pause: true,
+            show_artist_icon: true,
+        }
+    }
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn default_details_format() -> String {
+    "{track}".to_string()
+}
+
+fn default_state_format() -> String {
+    "{artist}".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
