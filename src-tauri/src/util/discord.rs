@@ -181,7 +181,7 @@ pub fn start_discord_rpc_service(
                         if let Some(provider) = queue.get_provider(pid).await {
                             if let Ok(album) = provider.get_album(&track.album_id).await {
                                 if let Some(art) = album.cover_art {
-                                    if art.starts_with("http") {
+                                    if art.starts_with("http") && !art.contains("getCoverArt") {
                                         cached_large_image = Some(art);
                                     }
                                 }
