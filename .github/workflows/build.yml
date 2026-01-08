@@ -26,6 +26,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check for changes
+        id: changed_src_files
+        uses: tj-actions/changed-files@v46
+        with:
+          files: |
+            src/**
+            src-tauri/**
+
       - name: install dependencies (ubuntu only)
         if: matrix.platform == 'ubuntu-latest'
         run: |
@@ -45,7 +53,7 @@ jobs:
           choco install 7zip -y
           curl -L -o mpv-dev.7z https://github.com/zhongfly/mpv-winbuild/releases/download/2026-01-08-85bf9f4/mpv-dev-x86_64-20260108-git-85bf9f4.7z
           7z x mpv-dev.7z -oC:\mpv-dev
-          ren libmpv.dll.a mpv.lib
+          ren C:\mpv-dev\libmpv.dll.a C:\mpv-dev\mpv.lib
           echo "MPV_SOURCE=C:\mpv-dev" >> $env:GITHUB_ENV
           echo "C:\mpv-dev" >> $env:GITHUB_PATH
 
