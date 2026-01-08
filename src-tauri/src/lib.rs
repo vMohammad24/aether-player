@@ -248,7 +248,9 @@ pub async fn run() {
                                 id.clone(),
                                 name.clone(),
                                 credentials,
-                            ) {
+                            )
+                            .await
+                            {
                                 queue.add_provider(Arc::new(provider)).await;
                             }
                         }
