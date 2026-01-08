@@ -1,6 +1,11 @@
 <script lang="ts">
-  import { commands, type SourceConfig } from "$lib/bindings";
+  import {
+    commands,
+    type DeviceAuthPending,
+    type SourceConfig,
+  } from "$lib/bindings";
   import Button from "$lib/components/Button.svelte";
+  import Tidal from "$lib/components/logos/Tidal.svg";
   import Modal from "$lib/components/Modal.svelte";
   import { config } from "$lib/stores/config.svelte";
   import { confirm } from "$lib/stores/confirm.svelte";
@@ -9,9 +14,10 @@
   import { md5 } from "$lib/util";
   import { Folder, Globe, Music2, RefreshCcw, Trash } from "@lucide/svelte";
   import { open } from "@tauri-apps/plugin-dialog";
+  import { openUrl } from "@tauri-apps/plugin-opener";
 
   let showAddSourceModal = $state(false);
-  let newSourceType = $state<"local" | "subsonic">("local");
+  let newSourceType = $state<"local" | "subsonic" | "tidal">("local");
 
   let localPath = $state("");
   let localName = $state("My Music");
@@ -20,6 +26,9 @@
   let subsonicUrl = $state("");
   let subsonicUser = $state("");
   let subsonicPass = $state("");
+
+  let tidalAuth = $state<DeviceAuthPending | null>(null);
+  let tidalLoading = $state(false);
 
   const KEYS_TO_INVALIDATE: (keyof typeof commands)[] = [
     "getRecentAlbums",
@@ -124,6 +133,48 @@
     subsonicUrl = "";
     subsonicUser = "";
     subsonicPass = "";
+    tidalAuth = null;
+    tidalLoading = false;
+  }
+
+  async function handleTidalLogin() {
+    tidalLoading = true;
+    try {
+      const res = await commands.startTidalLogin();
+      if (res.status === "ok") {
+        tidalAuth = res.data;
+        pollTidal();
+      } else {
+        toast.error(res.error);
+        tidalLoading = false;
+      }
+    } catch (e) {
+      toast.error(String(e));
+      tidalLoading = false;
+    }
+  }
+
+  async function pollTidal() {
+    try {
+      const res = await commands.pollTidalLogin(tidalAuth!);
+      if (res.status === "ok") {
+        toast.success("Tidal account connected");
+        config.forceSync();
+
+        showAddSourceModal = false;
+        resetSourceForm();
+      } else {
+        if (showAddSourceModal) {
+          toast.error("Login failed: " + res.error);
+        }
+        tidalLoading = false;
+        tidalAuth = null;
+      }
+    } catch (e) {
+      if (showAddSourceModal) toast.error(String(e));
+      tidalLoading = false;
+      tidalAuth = null;
+    }
   }
 </script>
 
@@ -148,6 +199,8 @@
             <Folder size={20} />
           {:else if source.type === "subsonic"}
             <Globe size={20} />
+          {:else if source.type === "tidal"}
+            <img src={Tidal} alt="Tidal Logo" class="h-5 w-5" />
           {:else}
             <Music2 size={20} />
           {/if}
@@ -159,7 +212,7 @@
               ? source.path
               : source.type === "subsonic"
                 ? source.url
-                : "Tidal"}
+                : source.user_id}
           </p>
         </div>
       </div>
@@ -245,6 +298,13 @@
           : 'text-subtext hover:text-text'}"
         onclick={() => (newSourceType = "subsonic")}>Subsonic</button
       >
+      <button
+        class="flex-1 py-1.5 text-sm font-medium rounded-md transition-colors {newSourceType ===
+        'tidal'
+          ? 'bg-accent text-white'
+          : 'text-subtext hover:text-text'}"
+        onclick={() => (newSourceType = "tidal")}>Tidal</button
+      >
     </div>
 
     {#if newSourceType === "local"}
@@ -293,7 +353,7 @@
           </p>
         </label>
       </div>
-    {:else}
+    {:else if newSourceType === "subsonic"}
       <div class="space-y-4">
         <label class="flex flex-col gap-2">
           <span class="text-sm font-medium text-subtext">Name</span>
@@ -337,15 +397,63 @@
           </label>
         </div>
       </div>
+    {:else if newSourceType === "tidal"}
+      {#if !tidalAuth}
+        <div class="space-y-4 text-center py-4">
+          <p class="text-sm text-subtext">
+            Connect your Tidal account to access your music library.
+          </p>
+          <Button onclick={handleTidalLogin} disabled={tidalLoading}>
+            {#if tidalLoading}Starting...{:else}Login with Tidal{/if}
+          </Button>
+        </div>
+      {:else}
+        <div class="space-y-4 text-center">
+          <p class="text-sm text-text font-medium">Action Required</p>
+          <p class="text-sm text-subtext">
+            Please visit the link below and enter the code to authorize Aether
+            Player.
+          </p>
+
+          <div class="bg-secondary p-4 rounded-md border border-border">
+            <p class="text-2xl font-mono text-accent tracking-widest">
+              {tidalAuth.user_code}
+            </p>
+          </div>
+
+          <Button
+            variant="ghost"
+            onclick={() =>
+              openUrl(`https://${tidalAuth!.verification_uri_complete}`)}
+          >
+            Open Login Page
+          </Button>
+
+          <div
+            class="flex items-center justify-center gap-2 text-xs text-subtext mt-4"
+          >
+            <div
+              class="w-4 h-4 border-2 border-subtext border-t-accent rounded-full animate-spin"
+            ></div>
+            Waiting for authorization...
+          </div>
+        </div>
+      {/if}
     {/if}
 
     <div class="flex justify-end gap-3 pt-2">
-      <Button variant="ghost" onclick={() => (showAddSourceModal = false)}
-        >Cancel</Button
+      <Button
+        variant="ghost"
+        onclick={() => {
+          showAddSourceModal = false;
+          resetSourceForm();
+        }}>Cancel</Button
       >
-      <Button onclick={handleAddSource} disabled={addSource.isPending}>
-        {#if addSource.isPending}Adding...{:else}Add Source{/if}
-      </Button>
+      {#if newSourceType !== "tidal"}
+        <Button onclick={handleAddSource} disabled={addSource.isPending}>
+          {#if addSource.isPending}Adding...{:else}Add Source{/if}
+        </Button>
+      {:else}{/if}
     </div>
   </div>
 </Modal>

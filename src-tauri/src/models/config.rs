@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+
 use specta::Type;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -105,9 +106,12 @@ pub enum SourceConfig {
     Tidal {
         id: String,
         name: String,
-        token: String,
-        refresh_token: String,
-        token_expiry: DateTime<Utc>,
+        access_token: Option<String>,
+        refresh_token: Option<String>,
+        expires_at: Option<DateTime<Utc>>,
+        user_id: Option<String>,
+        country_code: String,
+        scopes: Vec<String>,
         enabled: bool,
     },
 }

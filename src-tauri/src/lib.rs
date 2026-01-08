@@ -82,7 +82,9 @@ pub async fn run() {
             commands::config::get_app_config,
             commands::config::save_app_config,
             commands::lastfm::login_lastfm,
-            commands::lastfm::finish_lastfm_login
+            commands::lastfm::finish_lastfm_login,
+            commands::tidal::start_tidal_login,
+            commands::tidal::poll_tidal_login,
         ])
         .events(tauri_specta::collect_events![
             crate::models::entities::PlayerEvent
@@ -105,7 +107,7 @@ pub async fn run() {
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(
             tauri_plugin_log::Builder::default()
-                .level(log::LevelFilter::Debug)
+                .level(log::LevelFilter::Info)
                 .build(),
         )
         .plugin(tauri_plugin_sql::Builder::default().build())
@@ -219,7 +221,37 @@ pub async fn run() {
                                 queue.add_provider(Arc::new(provider)).await;
                             }
                         }
-                        _ => {}
+                        SourceConfig::Tidal {
+                            id,
+                            name,
+                            access_token,
+                            refresh_token,
+                            expires_at,
+                            user_id,
+                            country_code,
+                            scopes,
+                            enabled,
+                        } => {
+                            if !*enabled {
+                                continue;
+                            }
+                            let credentials = crate::providers::tidal::TidalCredentials {
+                                access_token: access_token.clone(),
+                                refresh_token: refresh_token.clone(),
+                                expires_at: *expires_at,
+                                user_id: user_id.clone(),
+                                country_code: country_code.clone(),
+                                scopes: scopes.clone(),
+                            };
+
+                            if let Ok(provider) = crate::providers::tidal::TidalProvider::new(
+                                id.clone(),
+                                name.clone(),
+                                credentials,
+                            ) {
+                                queue.add_provider(Arc::new(provider)).await;
+                            }
+                        }
                     }
                 }
 
