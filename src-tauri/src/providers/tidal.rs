@@ -10,9 +10,41 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 const TIDAL_AUTH_BASE_URI: &str = "https://auth.tidal.com/v1";
+const TIDAL_API_URL: &str = "https://api.tidal.com/v1";
+const TIDAL_API_V2_URL: &str = "https://api.tidal.com/v2";
+const TIDAL_OPENAPI_V2_URL: &str = "https://openapi.tidal.com/v2";
+const TIDAL_DESKTOP_V1_URL: &str = "https://desktop.tidal.com/v1";
+const TIDAL_DESKTOP_V2_URL: &str = "https://desktop.tidal.com/v2";
+const TIDAL_VERSION: &str = "2026.1.5";
 const TIDAL_USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) TIDAL/1.8.0-beta Chrome/126.0.6478.127 Electron/31.2.1 Safari/537.36";
 const TIDAL_CLIENT_ID: &str = env!("TIDAL_CLIENT_ID");
 const TIDAL_CLIENT_SECRET: &str = env!("TIDAL_CLIENT_SECRET");
+const TIDAL_TOKEN: &str = env!("TIDAL_CLIENT_TOKEN");
+
+#[derive(Clone, Copy, Debug)]
+pub enum ApiVersion {
+    V1,
+    V2,
+    OpenApi,
+    Desktop,
+    DesktopV2,
+}
+
+impl ApiVersion {
+    fn base_url(&self) -> &'static str {
+        match self {
+            ApiVersion::V1 => TIDAL_API_URL,
+            ApiVersion::V2 => TIDAL_API_V2_URL,
+            ApiVersion::OpenApi => TIDAL_OPENAPI_V2_URL,
+            ApiVersion::Desktop => TIDAL_DESKTOP_V1_URL,
+            ApiVersion::DesktopV2 => TIDAL_DESKTOP_V2_URL,
+        }
+    }
+
+    fn requires_oauth(&self) -> bool {
+        !matches!(self, ApiVersion::V1)
+    }
+}
 
 #[derive(Clone)]
 pub struct TidalProvider {
@@ -89,6 +121,89 @@ impl TidalProvider {
         }
 
         Ok(())
+    }
+
+    pub async fn request<T: serde::de::DeserializeOwned>(
+        &self,
+        method: reqwest::Method,
+        path: &str,
+        params: Option<HashMap<String, String>>,
+        data: Option<serde_json::Value>,
+        api_version: ApiVersion,
+    ) -> Result<T> {
+        let creds = self.credentials.read().await;
+
+        let use_oauth = creds.access_token.is_some();
+
+        if !use_oauth {
+            return Err(anyhow!("Session is not valid. Please login first."));
+        }
+
+        drop(creds);
+
+        self.ensure_valid_token()
+            .await
+            .context("Failed to ensure valid OAuth token")?;
+
+        let creds = self.credentials.read().await;
+
+        let access_token = creds
+            .access_token
+            .as_ref()
+            .ok_or_else(|| anyhow!("OAuth token required but not available"))?;
+
+        let country_code = &creds.country_code;
+
+        let base_url = api_version.base_url();
+        let url = format!(
+            "{}/{}",
+            base_url.trim_end_matches('/'),
+            path.trim_start_matches('/')
+        );
+
+        let mut query_params = params.unwrap_or_default();
+        query_params.insert("countryCode".to_string(), country_code.clone());
+        query_params.insert("deviceType".to_string(), "DESKTOP".to_string());
+        query_params.insert("locale".to_string(), "en_US".to_string());
+        query_params.insert("platform".to_string(), "DESKTOP".to_string());
+
+        let mut request = self
+            .client
+            .request(method.clone(), &url)
+            .query(&query_params)
+            .header("user-agent", TIDAL_USER_AGENT)
+            .header("x-tidal-client-version", TIDAL_VERSION)
+            .header("Authorization", format!("Bearer {}", access_token));
+
+        request = match api_version {
+            ApiVersion::V2 => request.header("Accept", "application/vnd.tidal.v1+json"),
+            ApiVersion::OpenApi | ApiVersion::Desktop | ApiVersion::DesktopV2 => {
+                request.header("Accept", "application/json")
+            }
+            ApiVersion::V1 => request,
+        };
+
+        if let Some(body) = data {
+            request = request.json(&body);
+        }
+
+        let response = request.send().await.context("Failed to send request")?;
+
+        let status = response.status();
+
+        if !status.is_success() {
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(anyhow!(
+                "API request failed with status {}: {}",
+                status,
+                error_text
+            ));
+        }
+
+        response
+            .json::<T>()
+            .await
+            .context("Failed to parse response JSON")
     }
 
     pub async fn start_device_auth() -> Result<DeviceAuthPending> {
