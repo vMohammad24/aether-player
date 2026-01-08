@@ -400,8 +400,12 @@
     {:else if newSourceType === "tidal"}
       {#if !tidalAuth}
         <div class="space-y-4 text-center py-4">
-          <p class="text-sm text-subtext">
+          <p class="text-sm text-text">
             Connect your Tidal account to access your music library.
+          </p>
+          <p class="text-sm text-yellow">
+            WARNING: This feature is still VERY experimental and may not work
+            perfectly. (playback is broken atm)
           </p>
           <Button onclick={handleTidalLogin} disabled={tidalLoading}>
             {#if tidalLoading}Starting...{:else}Login with Tidal{/if}
