@@ -103,6 +103,12 @@ jobs:
           echo "CERT_ID=$CERT_ID" >> $GITHUB_ENV
           echo "Certificate imported."
 
+      - name: set build paths (mac only)
+        if: contains(matrix.platform, 'macos')
+        run: |
+          BREW_PREFIX=$(brew --prefix)
+          echo "LIBRARY_PATH=$BREW_PREFIX/lib:$LIBRARY_PATH" >> $GITHUB_ENV
+          echo "PKG_CONFIG_PATH=$BREW_PREFIX/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
       - name: build and publish
         uses: tauri-apps/tauri-action@v0.6.1
         env:
@@ -112,14 +118,14 @@ jobs:
           TIDAL_CLIENT_ID: ${{ secrets.TIDAL_CLIENT_ID }}
           TIDAL_CLIENT_SECRET: ${{ secrets.TIDAL_CLIENT_SECRET }}
           MPV_SOURCE: ${{ env.MPV_SOURCE}}
+          PKG_CONFIG_PATH: ${{env.PKG_CONFIG_PATH}}
+          LIBRARY_PATH: ${{env.LIBRARY_PATH}}
           APPLE_ID: ${{ contains(matrix.platform, 'macos') && secrets.APPLE_ID || '' }}
           APPLE_PASSWORD: ${{ contains(matrix.platform, 'macos') && secrets.APPLE_PASSWORD || '' }}
           APPLE_TEAM_ID: ${{ contains(matrix.platform, 'macos') && secrets.APPLE_TEAM_ID || '' }}
           APPLE_CERTIFICATE: ${{ contains(matrix.platform, 'macos') && secrets.APPLE_CERTIFICATE || '' }}
           APPLE_CERTIFICATE_PASSWORD: ${{ contains(matrix.platform, 'macos') && secrets.APPLE_CERTIFICATE_PASSWORD || '' }}
           APPLE_SIGNING_IDENTITY: ${{ contains(matrix.platform, 'macos') && env.CERT_ID || '' }}
-          PKG_CONFIG_PATH: ${{ contains(matrix.platform, 'macos') && '/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH' || '' }}
-          LIBRARY_PATH: ${{ contains(matrix.platform, 'macos') && '/opt/homebrew/lib:$LIBRARY_PATH' || '' }}
         with:
           tagName: app-v__VERSION__
           releaseName: "Aether Player v__VERSION__"
