@@ -22,7 +22,7 @@ specta-typescript = "0.0.9"
 tauri-specta = { version = "2.0.0-rc.21", features = ["derive", "typescript"] }
 tokio = { version = "1", features = ["full"] }
 rand = "0.9"
-libmpv2 = { version = "5", features = ["build_libmpv"] }
+libmpv2 = { version = "5" }
 anyhow = "1.0"
 tempfile= "3"
 async-trait = "0.1"
