@@ -14,7 +14,9 @@ jobs:
       matrix:
         include:
           - platform: "macos-latest"
-            args: "--target universal-apple-darwin"
+            args: "--target aarch64-apple-darwin"
+          - platform: "macos-15-intel"
+            args: "--target x86_64-apple-darwin"
           - platform: "ubuntu-latest"
             args: ""
           - platform: "windows-latest"
@@ -32,7 +34,7 @@ jobs:
           echo
 
       - name: install dependencies (mac only)
-        if: matrix.platform == 'macos-latest'
+        if: contains(matrix.platform, 'macos')
         run: |
           brew update
           brew install mpv pkg-config
@@ -43,9 +45,7 @@ jobs:
           choco install 7zip -y
           curl -L -o mpv-dev.7z https://github.com/zhongfly/mpv-winbuild/releases/download/2026-01-08-85bf9f4/mpv-dev-x86_64-20260108-git-85bf9f4.7z
           7z x mpv-dev.7z -oC:\mpv-dev
-          mkdir C:\mpv-dev\64
-          move C:\mpv-dev\libmpv.dll.a C:\mpv-dev\64\mpv.lib
-
+          ren libmpv.dll.a mpv.lib
           echo "MPV_SOURCE=C:\mpv-dev" >> $env:GITHUB_ENV
           echo "C:\mpv-dev" >> $env:GITHUB_PATH
 
@@ -61,7 +61,7 @@ jobs:
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin' || matrix.platform == 'macos-15-intel' && 'x86_64-apple-darwin' || '' }}
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
@@ -72,7 +72,7 @@ jobs:
         run: bun install
 
       - name: import Apple Developer Certificate
-        if: matrix.platform == 'macos-latest'
+        if: contains(matrix.platform, 'macos')
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -88,7 +88,7 @@ jobs:
           security find-identity -v -p codesigning build.keychain
 
       - name: verify certificate
-        if: matrix.platform == 'macos-latest'
+        if: contains(matrix.platform, 'macos')
         run: |
           CERT_INFO=$(security find-identity -v -p codesigning build.keychain | grep "Developer ID Application")
           CERT_ID=$(echo "$CERT_INFO" | awk -F'"' '{print $2}')
@@ -104,18 +104,17 @@ jobs:
           TIDAL_CLIENT_ID: ${{ secrets.TIDAL_CLIENT_ID }}
           TIDAL_CLIENT_SECRET: ${{ secrets.TIDAL_CLIENT_SECRET }}
           MPV_SOURCE: ${{ env.MPV_SOURCE}}
-          APPLE_ID: ${{ matrix.platform == 'macos-latest' && secrets.APPLE_ID || '' }}
-          APPLE_PASSWORD: ${{ matrix.platform == 'macos-latest' && secrets.APPLE_PASSWORD || '' }}
-          APPLE_TEAM_ID: ${{ matrix.platform == 'macos-latest' && secrets.APPLE_TEAM_ID || '' }}
-          APPLE_CERTIFICATE: ${{ matrix.platform == 'macos-latest' && secrets.APPLE_CERTIFICATE || '' }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ matrix.platform == 'macos-latest' && secrets.APPLE_CERTIFICATE_PASSWORD || '' }}
-          APPLE_SIGNING_IDENTITY: ${{ matrix.platform == 'macos-latest' && env.CERT_ID || '' }}
-          PKG_CONFIG_PATH: ${{ matrix.platform == 'macos-latest' && '/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH' || '' }}
-          LIBRARY_PATH: ${{ matrix.platform == 'macos-latest' && '/opt/homebrew/lib:$LIBRARY_PATH' || '' }}
+          APPLE_ID: ${{ contains(matrix.platform, 'macos') && secrets.APPLE_ID || '' }}
+          APPLE_PASSWORD: ${{ contains(matrix.platform, 'macos') && secrets.APPLE_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ contains(matrix.platform, 'macos') && secrets.APPLE_TEAM_ID || '' }}
+          APPLE_CERTIFICATE: ${{ contains(matrix.platform, 'macos') && secrets.APPLE_CERTIFICATE || '' }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ contains(matrix.platform, 'macos') && secrets.APPLE_CERTIFICATE_PASSWORD || '' }}
+          APPLE_SIGNING_IDENTITY: ${{ contains(matrix.platform, 'macos') && env.CERT_ID || '' }}
+          PKG_CONFIG_PATH: ${{ contains(matrix.platform, 'macos') && '/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH' || '' }}
+          LIBRARY_PATH: ${{ contains(matrix.platform, 'macos') && '/opt/homebrew/lib:$LIBRARY_PATH' || '' }}
         with:
           tagName: app-v__VERSION__
-          releaseName: "App v__VERSION__"
-          releaseBody: "See the assets to download this version and install."
+          releaseName: "Aether Player v__VERSION__"
           releaseDraft: false
           prerelease: false
           includeUpdaterJson: true
