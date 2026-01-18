@@ -102,6 +102,7 @@ pub async fn run() {
     let providers: HashMap<String, Arc<dyn LibraryProvider>> = HashMap::new();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_prevent_default::debug())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_store::Builder::new().build())
