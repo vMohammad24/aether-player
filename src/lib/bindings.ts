@@ -416,9 +416,9 @@ async startTidalLogin() : Promise<Result<DeviceAuthPending, string>> {
     else return { status: "error", error: e  as any };
 }
 },
-async pollTidalLogin(config: DeviceAuthPending) : Promise<Result<null, string>> {
+async pollTidalLogin(authConfig: DeviceAuthPending) : Promise<Result<null, string>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("poll_tidal_login", { config }) };
+    return { status: "ok", data: await TAURI_INVOKE("poll_tidal_login", { authConfig }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
