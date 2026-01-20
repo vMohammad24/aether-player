@@ -8,6 +8,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::Mutex;
 
 const DISCORD_APP_ID: &str = "1458263853203853477";
+const DEFAULT_LARGE_IMAGE: &str = "icon";
+const DEFAULT_ALBUM_TEXT: &str = "Unknown album";
+const DEFAULT_ARTIST_TEXT: &str = "Unknown artist";
+const PAUSE_IMAGE: &str = "pause";
 
 pub struct DiscordRpc {
     client: Option<DiscordIpcClient>,
@@ -53,6 +57,18 @@ impl DiscordRpc {
         }
     }
 
+    fn ensure_connected(&mut self) -> bool {
+        if !self.config.enabled {
+            return false;
+        }
+
+        if self.client.is_none() {
+            self.connect();
+        }
+
+        self.client.is_some()
+    }
+
     pub fn update_presence(
         &mut self,
         track: &Track,
@@ -62,12 +78,8 @@ impl DiscordRpc {
         large_image_url: Option<String>,
         artist_image_url: Option<String>,
     ) {
-        if !self.config.enabled {
+        if !self.ensure_connected() {
             return;
-        }
-
-        if self.client.is_none() {
-            self.connect();
         }
 
         let details = if self.config.show_details {
@@ -86,6 +98,18 @@ impl DiscordRpc {
         let show_time = self.config.show_time;
         let activity_on_pause = self.config.activity_on_pause;
 
+        let album_text = if track.album_title.is_empty() {
+            DEFAULT_ALBUM_TEXT.to_string()
+        } else {
+            track.album_title.clone()
+        };
+
+        let artist_text = if track.artist_name.is_empty() {
+            DEFAULT_ARTIST_TEXT.to_string()
+        } else {
+            track.artist_name.clone()
+        };
+
         if let Some(client) = &mut self.client {
             let mut activity = activity::Activity::new();
             activity = activity.activity_type(activity::ActivityType::Listening);
@@ -102,31 +126,34 @@ impl DiscordRpc {
             if let Some(url) = &large_image_url {
                 assets = assets.large_image(url);
             } else {
-                assets = assets.large_image("icon");
+                assets = assets.large_image(DEFAULT_LARGE_IMAGE);
             }
-            assets = assets.large_text(&track.album_title);
+            assets = assets.large_text(&album_text);
 
             if is_playing {
                 if show_artist_icon {
                     if let Some(url) = &artist_image_url {
                         assets = assets.small_image(url);
-                        assets = assets.small_text(&track.artist_name);
+                        assets = assets.small_text(&artist_text);
                     }
                 }
 
                 if show_time {
-                    let now = SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .unwrap()
-                        .as_secs() as i64;
-                    let start = now - position as i64;
-                    let end = start + (duration as i64);
-                    activity =
-                        activity.timestamps(activity::Timestamps::new().start(start).end(end));
+                    if let Some(now) = now_unix_seconds() {
+                        let clamped_duration = duration.max(0.0) as i64;
+                        let clamped_position = position.max(0.0).min(duration.max(0.0)) as i64;
+                        let start = now - clamped_position;
+                        let end = start + clamped_duration;
+
+                        if end > start {
+                            activity = activity
+                                .timestamps(activity::Timestamps::new().start(start).end(end));
+                        }
+                    }
                 }
             } else {
                 if activity_on_pause {
-                    assets = assets.small_image("pause");
+                    assets = assets.small_image(PAUSE_IMAGE);
                     assets = assets.small_text("Paused");
                 }
             }
@@ -151,6 +178,13 @@ fn format_track_string(format: &str, track: &Track) -> String {
         .replace("{track}", &track.title)
         .replace("{artist}", &track.artist_name)
         .replace("{album}", &track.album_title)
+}
+
+fn now_unix_seconds() -> Option<i64> {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .ok()
+        .map(|duration| duration.as_secs() as i64)
 }
 
 pub fn start_discord_rpc_service(
