@@ -1,6 +1,8 @@
 <script lang="ts">
   import { dev } from "$app/environment";
+  import { goto } from "$app/navigation";
   import { page } from "$app/state";
+  import { shortcuts } from "$lib/stores/shortcuts.svelte";
   import {
     ChevronRight,
     CirclePlay,
@@ -90,6 +92,27 @@
     }
   }
 
+  function getNavTargets() {
+    const targets: Array<{ href: string; sectionId?: string }> = [];
+
+    for (const item of config) {
+      if (item.type === "single") {
+        if (item.href && !item.disabled) targets.push({ href: item.href });
+        continue;
+      }
+
+      if (item.type === "section" && item.children) {
+        for (const child of item.children) {
+          if (child.href) {
+            targets.push({ href: child.href, sectionId: item.id });
+          }
+        }
+      }
+    }
+
+    return targets;
+  }
+
   onMount(() => {
     const checkMobile = () => {
       const wasMobile = isMobile;
@@ -131,6 +154,30 @@
       passive: true,
     });
     document.addEventListener("touchend", handleTouchEnd, { passive: true });
+
+    shortcuts.on("sidebar.toggle", () => {
+      isOpen = !isOpen;
+    });
+
+    shortcuts.on("sidebar.scroll", () => {
+      const targets = getNavTargets();
+      if (targets.length === 0) return;
+
+      const currentIndex = targets.findIndex(
+        (target) => target.href === page.url.pathname
+      );
+      const nextIndex =
+        currentIndex >= 0 ? (currentIndex + 1) % targets.length : 0;
+      const target = targets[nextIndex];
+
+      if (target.sectionId) {
+        expandedSections[target.sectionId] = true;
+      }
+
+      if (target.href !== page.url.pathname) {
+        goto(target.href);
+      }
+    });
 
     return () => {
       window.removeEventListener("resize", checkMobile);

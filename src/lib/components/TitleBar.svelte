@@ -4,6 +4,7 @@
   import { media } from "$lib/stores/player/media.svelte";
   import { player } from "$lib/stores/player/player.svelte";
   import { createMutation } from "$lib/stores/resource.svelte";
+  import { shortcuts } from "$lib/stores/shortcuts.svelte";
   import { formatDuration } from "$lib/util";
   import {
     ChevronLeft,
@@ -16,6 +17,7 @@
     X,
   } from "@lucide/svelte";
   import { getCurrentWindow } from "@tauri-apps/api/window";
+  import { onMount } from "svelte";
   import Button from "./Button.svelte";
   import Image from "./Image.svelte";
 
@@ -23,6 +25,7 @@
   let searchQuery = $state("");
   let canGoBack = $state(false);
   let canGoForward = $state(false);
+  let searchInput = $state<HTMLInputElement | null>(null);
 
   // @ts-expect-error
   const nav = typeof navigation !== "undefined" ? navigation : null;
@@ -71,6 +74,16 @@
     if (action === "back") canGoBack && history.back();
     else canGoForward && history.forward();
   }
+
+  onMount(() => {
+    const cleanup = shortcuts.on("app.search", () => {
+      if (!searchInput) return;
+      isFocused = true;
+      searchInput.focus();
+      searchInput.select();
+    });
+    return cleanup;
+  });
 </script>
 
 <header
@@ -117,6 +130,7 @@
     </div>
 
     <input
+      bind:this={searchInput}
       type="text"
       placeholder="Search artists or tracks"
       bind:value={searchQuery}

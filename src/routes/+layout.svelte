@@ -1,13 +1,20 @@
 <script lang="ts">
   import AudioPlayer from "$lib/components/player/AudioPlayer.svelte";
   import Toaster from "$lib/components/Toaster.svelte";
+  import { shortcuts } from "$lib/stores/shortcuts.svelte";
   import { theme } from "$lib/stores/theme.svelte";
+  import { onMount } from "svelte";
   import Sidebar from "../lib/components/Sidebar.svelte";
   import TitleBar from "../lib/components/TitleBar.svelte";
   import "./layout.css";
 
   const { children } = $props();
   theme.init();
+
+  onMount(() => {
+    shortcuts.start();
+    return shortcuts.stop;
+  });
 </script>
 
 <Toaster />
