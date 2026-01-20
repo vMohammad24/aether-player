@@ -407,22 +407,6 @@ async finishLastfmLogin(token: string) : Promise<Result<null, string>> {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
-},
-async startTidalLogin() : Promise<Result<DeviceAuthPending, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("start_tidal_login") };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async pollTidalLogin(authConfig: DeviceAuthPending) : Promise<Result<null, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("poll_tidal_login", { authConfig }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
 }
 }
 
@@ -446,7 +430,6 @@ export type AppConfig = { theme: string; audioOutputDevice: string | null; sourc
 export type Artist = { id: string; name: string; bio: string | null; imageUrl: string | null }
 export type AudioBackend = { type: "mpv"; options: MpvConfig }
 export type AudioDevice = { id: string; name: string; isDefault: boolean; isCurrent: boolean }
-export type DeviceAuthPending = { device_code: string; user_code: string; verification_uri: string; verification_uri_complete: string; expires_at: string; interval: number }
 export type DiscordRpcConfig = { enabled: boolean; showDetails?: boolean; showState?: boolean; showTime?: boolean; detailsFormat?: string; stateFormat?: string; activityOnPause?: boolean; showArtistIcon?: boolean }
 export type Genre = { name: string; trackCount: number }
 export type LastFmAuthUrl = { url: string; token: string }
@@ -458,7 +441,7 @@ export type PlayerState = { paused: boolean; position: number; duration: number;
 export type Playlist = { id: string; name: string; owner: string; trackCount: number; coverArt: string | null; createdAt: string }
 export type Queue = { id: string; tracks: Track[]; currentIndex: number; shuffle: boolean; repeat: RepeatMode }
 export type RepeatMode = "off" | "all" | "one"
-export type SourceConfig = { type: "local"; id: string; name: string; path: string; enabled: boolean } | { type: "subsonic"; id: string; name: string; url: string; username: string; token: string; salt: string; enabled: boolean } | { type: "tidal"; id: string; name: string; access_token: string | null; refresh_token: string | null; expires_at: string | null; user_id: string | null; country_code: string; scopes: string[]; enabled: boolean }
+export type SourceConfig = { type: "local"; id: string; name: string; path: string; enabled: boolean } | { type: "subsonic"; id: string; name: string; url: string; username: string; token: string; salt: string; enabled: boolean }
 export type Track = { id: string; providerId: string | null; title: string; artistId: string; artistName: string; albumId: string; albumTitle: string; durationSec: number; trackNumber: number | null; discNumber: number | null; year: number | null; genre: string | null; bitrate: number | null; playCount: number; liked: boolean }
 export type UnifiedSearchResult = { tracks: Track[]; albums: Album[]; artists: Artist[] }
 

@@ -67,7 +67,6 @@ pub async fn add_source(
                 .add_provider(std::sync::Arc::new(provider))
                 .await;
         }
-        _ => return Err("Provider type not implemented yet".to_string()),
     }
 
     Ok(())
@@ -107,7 +106,6 @@ pub async fn delete_source(
     config.sources.retain(|s| match s {
         SourceConfig::Local { id, .. } => id != &source_id,
         SourceConfig::Subsonic { id, .. } => id != &source_id,
-        SourceConfig::Tidal { id, .. } => id != &source_id,
     });
 
     let val = serde_json::to_value(&config).map_err(|e| e.to_string())?;
@@ -136,8 +134,7 @@ pub async fn toggle_source(
     for source in &mut config.sources {
         match source {
             SourceConfig::Local { id, enabled: e, .. }
-            | SourceConfig::Subsonic { id, enabled: e, .. }
-            | SourceConfig::Tidal { id, enabled: e, .. } => {
+            | SourceConfig::Subsonic { id, enabled: e, .. } => {
                 if id == &source_id {
                     *e = enabled;
                     found_source = Some(source.clone());
@@ -189,7 +186,6 @@ pub async fn toggle_source(
                         .add_provider(std::sync::Arc::new(provider))
                         .await;
                 }
-                _ => {}
             }
         } else {
             state.queue.remove_provider(&source_id).await;
