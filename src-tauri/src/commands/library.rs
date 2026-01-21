@@ -8,7 +8,6 @@ use crate::state::AppState;
 use crate::traits::LibraryProvider;
 use rand::seq::SliceRandom;
 use tauri::{AppHandle, State};
-use tauri_plugin_store::StoreExt;
 
 #[tauri::command]
 #[specta::specta]
@@ -17,17 +16,10 @@ pub async fn add_source(
     app: AppHandle,
     source: SourceConfig,
 ) -> Result<(), String> {
-    let store = app.store("config.json").map_err(|e| e.to_string())?;
-    let mut config: crate::models::AppConfig = if let Some(val) = store.get("appConfig") {
-        serde_json::from_value(val).map_err(|e| format!("Config error: {}", e))?
-    } else {
-        crate::models::AppConfig::default()
-    };
+    let mut config = crate::models::AppConfig::load(&app).map_err(|e| format!("Config error: {}", e))?;
 
     config.sources.push(source.clone());
-    let val = serde_json::to_value(&config).map_err(|e| e.to_string())?;
-    store.set("appConfig", val);
-    store.save().map_err(|e| e.to_string())?;
+    config.save(&app).map_err(|e| e.to_string())?;
 
     match source {
         SourceConfig::Local { id, path, .. } => {
@@ -81,12 +73,7 @@ pub async fn delete_source(
 ) -> Result<(), String> {
     state.queue.remove_provider(&source_id).await;
 
-    let store = app.store("config.json").map_err(|e| e.to_string())?;
-    let mut config: crate::models::AppConfig = if let Some(val) = store.get("appConfig") {
-        serde_json::from_value(val).map_err(|e| format!("Config error: {}", e))?
-    } else {
-        crate::models::AppConfig::default()
-    };
+    let mut config = crate::models::AppConfig::load(&app).map_err(|e| format!("Config error: {}", e))?;
 
     if let Some(source) = config.sources.iter().find(|s| match s {
         SourceConfig::Local { id, .. } => id == &source_id,
@@ -108,9 +95,7 @@ pub async fn delete_source(
         SourceConfig::Subsonic { id, .. } => id != &source_id,
     });
 
-    let val = serde_json::to_value(&config).map_err(|e| e.to_string())?;
-    store.set("appConfig", val);
-    store.save().map_err(|e| e.to_string())?;
+    config.save(&app).map_err(|e| e.to_string())?;
 
     Ok(())
 }
@@ -123,12 +108,7 @@ pub async fn toggle_source(
     source_id: String,
     enabled: bool,
 ) -> Result<(), String> {
-    let store = app.store("config.json").map_err(|e| e.to_string())?;
-    let mut config: crate::models::AppConfig = if let Some(val) = store.get("appConfig") {
-        serde_json::from_value(val).map_err(|e| format!("Config error: {}", e))?
-    } else {
-        crate::models::AppConfig::default()
-    };
+    let mut config = crate::models::AppConfig::load(&app).map_err(|e| format!("Config error: {}", e))?;
 
     let mut found_source = None;
     for source in &mut config.sources {
@@ -145,9 +125,7 @@ pub async fn toggle_source(
     }
 
     if let Some(source) = found_source {
-        let val = serde_json::to_value(&config).map_err(|e| e.to_string())?;
-        store.set("appConfig", val);
-        store.save().map_err(|e| e.to_string())?;
+        config.save(&app).map_err(|e| e.to_string())?;
 
         if enabled {
             match source {

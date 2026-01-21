@@ -3,7 +3,6 @@ use crate::models::AppConfig;
 use crate::state::AppState;
 use crate::util::lastfm::LastFmClient;
 use tauri::AppHandle;
-use tauri_plugin_store::StoreExt;
 
 #[derive(serde::Serialize, specta::Type)]
 pub struct LastFmAuthUrl {
@@ -33,13 +32,7 @@ pub async fn finish_lastfm_login(
     state: tauri::State<'_, AppState>,
     token: String,
 ) -> Result<(), String> {
-    let store = app.store("config.json").map_err(|e| e.to_string())?;
-
-    let mut config: AppConfig = if let Some(val) = store.get("appConfig") {
-        serde_json::from_value(val).map_err(|e| e.to_string())?
-    } else {
-        return Err("Configuration not found".to_string());
-    };
+    let mut config = AppConfig::load(&app).map_err(|e| e.to_string())?;
 
     let client = LastFmClient::new(None, None);
 
@@ -54,9 +47,7 @@ pub async fn finish_lastfm_login(
         enabled: true,
     });
 
-    let val = serde_json::to_value(&config).map_err(|e| e.to_string())?;
-    store.set("appConfig", val);
-    store.save().map_err(|e| e.to_string())?;
+    config.save(&app).map_err(|e| e.to_string())?;
 
     let mut state_lfm = state.lastfm.lock().await;
     let new_client = LastFmClient::new(Some(session.name), Some(session.key));

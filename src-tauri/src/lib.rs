@@ -20,7 +20,7 @@ use crate::state::AppState;
 use crate::traits::{AudioEngine, LibraryProvider};
 use std::collections::HashMap;
 use tauri::Manager;
-use tauri_plugin_store::StoreExt;
+
 fn create_audio_engine(config: &AppConfig) -> anyhow::Result<Box<dyn AudioEngine>> {
     match &config.audio_engine {
         AudioBackend::Mpv(mpv_opts) => Ok(Box::new(MpvPlayer::new(mpv_opts.clone())?)),
@@ -124,18 +124,10 @@ pub async fn run() {
         .setup(move |app| {
             builder.mount_events(app);
 
-            let store = app.store("config.json")?;
-            let config: AppConfig = if let Some(val) = store.get("appConfig") {
-                match serde_json::from_value(val) {
-                    Ok(c) => c,
-                    Err(e) => {
-                        log::error!("Failed to parse appConfig: {}. Using default.", e);
-                        AppConfig::default()
-                    }
-                }
-            } else {
+            let config = AppConfig::load(app.handle()).unwrap_or_else(|e| {
+                log::error!("Failed to load appConfig: {}. Using default.", e);
                 AppConfig::default()
-            };
+            });
 
             let player = create_audio_engine(&config)
                 .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;

@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 
 use specta::Type;
+use tauri::AppHandle;
+use tauri_plugin_store::StoreExt;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
@@ -12,6 +14,24 @@ pub struct AppConfig {
     pub audio_engine: AudioBackend,
     pub lastfm_session: Option<LastFmSessionConfig>,
     pub discord_rpc: Option<DiscordRpcConfig>,
+}
+
+impl AppConfig {
+    pub fn load(app: &AppHandle) -> Result<Self, String> {
+        let store = app.store("config.json").map_err(|e| e.to_string())?;
+        if let Some(val) = store.get("appConfig") {
+            serde_json::from_value(val).map_err(|e| e.to_string())
+        } else {
+            Ok(Self::default())
+        }
+    }
+
+    pub fn save(&self, app: &AppHandle) -> Result<(), String> {
+        let store = app.store("config.json").map_err(|e| e.to_string())?;
+        let val = serde_json::to_value(self).map_err(|e| e.to_string())?;
+        store.set("appConfig", val);
+        store.save().map_err(|e| e.to_string())
+    }
 }
 
 impl Default for AppConfig {
