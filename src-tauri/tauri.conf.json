@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "aether-player",
+  "productName": "Aether Player",
   "version": "0.1.1",
   "identifier": "dev.vmohammad.aether",
   "build": {
