@@ -1,3 +1,17 @@
+// NOTE: To the unfortunate soul tasked with maintaining this code; heed my words.
+// Ruin has befallen this once-proud repository.
+// You remember its prime, a bastion of clean logic and elegant design,
+// deployed with pride upon the finest of web servers.
+// Now, behold its descent into chaos. It has become The Pit.
+//
+// I must confess the sins of my hand:
+// Mistakes were sown, and the festering rot of technical debt has spread unchecked.
+// To implement even the simplest feature now is to face a Sisyphean torment-duplicated, twisted, sixfold over.
+// My efforts to cleanse this blight were stifled, for I was bound by the cruelest of masters: the deadline.
+// In my haste to deliver, quality was cast aside, sacrificed upon the altar of urgency.
+//
+// I beg you,
+// Turn back the clock. Revert the commits. Rebuild it, lest the bottomless pit claim us all.
 #![cfg_attr(
     all(not(debug_assertions), target_os = "windows"),
     windows_subsystem = "windows"
